@@ -1,4 +1,12 @@
 :root {
+  --bg-main: #080807;
+  --bg-page: #f3f0e6;
+  --bg-panel: #11110f;
+  --accent: #ffcc00;
+  --success: #2ecc71;
+  --danger: #ff4d4d;
+  --info: #4ea3ff;
+  --border-dark: rgba(255, 255, 255, 0.08);
   color: #0a0a0a;
   background: #f3f1ec;
   font-family:
@@ -1990,4 +1998,259 @@ textarea:focus {
   .tableRow {
     grid-template-columns: 1fr;
   }
+}
+/* PROLEUM UI TZ v1.1 */
+.gameShell {
+  display: grid;
+  grid-template-rows: 72px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(680px, 1fr) 420px;
+  grid-template-areas: "topbar topbar" "board market" "dock dock";
+  gap: 16px;
+  height: 100vh;
+  padding: 16px;
+  color: #f8f6ef;
+  background:
+    radial-gradient(circle at 15% 5%, rgba(0, 255, 78, 0.08), transparent 20%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    var(--bg-main);
+  background-size: auto, 28px 28px, 28px 28px, auto;
+  overflow: hidden;
+}
+
+.topBar {
+  grid-area: topbar;
+  position: relative;
+  overflow: hidden;
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.1), transparent 45%), var(--bg-panel);
+  border: 1px solid #2d2818;
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.topBarMain {
+  display: grid;
+  grid-template-columns: 180px 94px minmax(230px, 1fr) auto auto auto;
+  gap: 14px;
+  align-items: center;
+  height: 68px;
+  padding: 8px 12px;
+}
+
+.topBar .proleumLogo strong { font-size: 16px; }
+
+.dayBadge {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #070707;
+  border: 1px solid #332b15;
+  border-radius: 8px;
+}
+
+.dayBadge span,
+.terminalHeader span,
+.terminalDayCard span,
+.cardType {
+  color: #a99f87;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dayBadge strong {
+  color: var(--accent);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.topCta { min-width: 178px; min-height: 44px; white-space: nowrap; }
+
+.iconButton {
+  min-height: 36px;
+  padding-inline: 11px;
+  color: #eee6d3;
+  background: #181713;
+  border: 1px solid #393020;
+}
+
+.gameShell .boardPanel {
+  grid-area: board;
+  position: relative;
+  top: auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.gameShell .board {
+  width: min(100%, calc(100vh - 210px));
+  min-width: 0;
+  max-height: calc(100vh - 190px);
+  margin: 0 auto;
+  background: #f7f5ee;
+  border-color: #3b3528;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+}
+
+.boardCell { position: relative; border-top-width: 3px; }
+.boardCell strong { -webkit-line-clamp: 2; font-size: clamp(9px, 0.72vw, 12px); }
+.boardCell.currentCell { background: #fff7cc; box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255, 204, 0, 0.42); }
+.ownerStrip { position: absolute; inset: 0 0 auto; height: 4px; }
+.tokens i { width: 13px; height: 13px; border: 2px solid #fffdf6; border-radius: 999px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28); }
+.boardSummary { grid-template-columns: 1fr; }
+
+.marketDayCard,
+.terminalDayCard,
+.tickerRow,
+.gameCard {
+  position: relative;
+  border-radius: 14px;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.gameCard {
+  --card-accent: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent), #141411;
+  border: 1px solid var(--border-dark);
+  overflow: hidden;
+}
+
+.gameCard:hover:not(:disabled),
+.terminalDayCard:hover,
+.tickerRow:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: var(--card-accent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);
+}
+
+.cardS { width: 96px; height: 116px; }
+.cardM { width: 220px; min-height: 148px; }
+.cardL { width: min(520px, calc(100vw - 32px)); min-height: 320px; }
+
+.marketTerminal {
+  grid-area: market;
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px;
+  color: #f8f6ef;
+  background: linear-gradient(180deg, rgba(78, 163, 255, 0.08), transparent 35%), #0d0d0b;
+  border: 1px solid #2d2818;
+  border-radius: 10px;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.34);
+}
+
+.terminalHeader,
+.sideDrawer header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.terminalHeader strong,
+.sideDrawer header strong { display: block; color: #ffffff; }
+
+.terminalDayCard {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  color: #f8f6ef;
+  background: #151513;
+  border: 1px solid #332b15;
+  text-align: left;
+}
+
+.terminalDayCard strong { color: var(--accent); font-size: 13px; }
+.tickerPanel,
+.terminalLogistics,
+.terminalDeck { display: grid; gap: 8px; }
+.tickerPanel h3,
+.terminalLogistics h3,
+.terminalDeck h3 { margin: 0; color: #ffffff; font-size: 13px; }
+
+.tickerRow {
+  display: grid;
+  grid-template-columns: 52px 72px 46px 42px 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  color: #f8f6ef;
+  background: #121210;
+  border: 1px solid #25231d;
+  text-align: left;
+}
+
+.tickerCode { color: #8f8f89; font-size: 18px; font-weight: 950; }
+.tickerRow strong { color: #ffffff; }
+.tickerRow em { font-style: normal; font-weight: 950; }
+.tickerRow b { color: var(--accent); font-size: 12px; }
+
+.logisticMeter { display: grid; gap: 6px; padding: 9px; background: #121210; border: 1px solid #25231d; border-radius: 8px; }
+.logisticMeter div { display: flex; justify-content: space-between; background: transparent; border: 0; padding: 0; }
+.logisticMeter i { overflow: hidden; height: 6px; background: #2a271f; border-radius: 999px; }
+.logisticMeter b { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #ffffff); }
+
+.terminalScroll { display: grid; gap: 9px; max-height: min(310px, 36vh); overflow: auto; padding-right: 3px; }
+.tenderDeck .entityCard { border-color: rgba(255, 204, 0, 0.5); background: linear-gradient(145deg, rgba(255, 204, 0, 0.18), transparent 44%), #15120a; }
+
+.gameShell .playerDock {
+  grid-area: dock;
+  position: relative;
+  right: auto;
+  bottom: auto;
+  z-index: 8;
+  width: 100%;
+  transform: none;
+}
+.gameShell .dockHandle { margin-left: 0; width: 100%; border-radius: 8px 8px 0 0; }
+.gameShell .tabletStack { max-height: 360px; grid-template-columns: 1fr; }
+.playerTablet { grid-template-columns: 1.1fr 0.7fr 0.8fr; }
+.tabletZone.wide { grid-column: auto; }
+.dealSlots,
+.proleumSlots,
+.assetSlots { grid-template-columns: repeat(auto-fill, minmax(220px, 220px)); }
+.warehouseSlots { grid-template-columns: repeat(auto-fill, 96px); }
+.cardSlot { min-height: 116px; border-radius: 14px; cursor: pointer; }
+.cardSlot:disabled { cursor: default; }
+.dealSlot { width: 220px; min-height: 148px; }
+.warehouseSlot { width: 96px; min-height: 116px; }
+
+.sideDrawer {
+  position: fixed;
+  top: 96px;
+  right: 16px;
+  z-index: 19;
+  display: grid;
+  gap: 12px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 128px);
+  padding: 16px;
+  color: #f8f6ef;
+  background: #0d0d0b;
+  border: 1px solid #332b15;
+  border-radius: 10px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+  animation: drawerIn 0.22s ease-out;
+}
+.sideDrawer .modalClose { position: static; color: #f8f6ef; background: #1c1a15; }
+.drawerList { display: grid; gap: 8px; overflow: auto; }
+.drawerList p { display: grid; gap: 4px; margin: 0; padding: 10px; color: #d8d0c0; background: #141411; border: 1px solid #27231a; border-radius: 8px; font-size: 13px; }
+.drawerList p span { color: var(--accent); font-size: 10px; font-weight: 900; }
+
+.cardBackdrop { background: rgba(0, 0, 0, 0.42); }
+.cardSheet { color: #f8f6ef; background: radial-gradient(circle at 100% 0%, rgba(255, 204, 0, 0.12), transparent 22%), #11110f; border-color: rgba(255, 204, 0, 0.46); animation: cardExpand 0.24s ease-out; }
+.cardSheet h2 { color: #ffffff; }
+.cardSheet p { color: #d8d0c0; }
+.cardFacts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cardFacts span { padding: 8px 10px; color: #d8d0c0; background: #1a1812; border: 1px solid #332b15; border-radius: 8px; font-size: 12px; }
+.cardFacts strong { color: var(--accent); }
+
+@keyframes drawerIn { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes cardExpand { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+
+@media (max-width: 1180px) {
+  .gameShell { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "topbar" "board" "market" "dock"; height: auto; min-height: 100vh; overflow: visible; }
+  .topBarMain { grid-template-columns: 1fr; height: auto; }
+  .gameShell .board { width: min(100%, 760px); max-height: none; }
+  .marketTerminal { grid-template-rows: auto; }
+  .playerTablet { grid-template-columns: 1fr; }
 }

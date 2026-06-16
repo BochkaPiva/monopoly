@@ -27,6 +27,7 @@ const root = document.querySelector("#root");
 let lastSyncedState = "";
 let modalState = null;
 let diceState = null;
+let sidePanel = null;
 
 normalizeState(state);
 applyStartupRoute();
@@ -148,7 +149,13 @@ function scorePlayer(player) {
 }
 
 function activeRoom() {
-  return state.rooms.find((room) => room.id === activeRoomId) || null;
+  const room = state.rooms.find((room) => room.id === activeRoomId);
+  if (room) return room;
+  if (view === "game" && state.rooms[0]) {
+    activeRoomId = state.rooms[0].id;
+    return state.rooms[0];
+  }
+  return null;
 }
 
 function applyStartupRoute() {
@@ -292,6 +299,10 @@ function cloneDeal(entity) {
 
 function resourceTotal(resource = {}) {
   return Object.values(resource).reduce((sum, value) => sum + Number(value || 0), 0);
+}
+
+function isContractFilled(contract) {
+  return Object.entries(contract.resource || {}).every(([code, amount]) => (contract.filled?.[code] || 0) >= amount);
 }
 
 function missingResources(contract) {
@@ -550,71 +561,67 @@ function roomCardMarkup(room) {
 function gameMarkup(room) {
   normalizeState(state);
   const mine = userPlayer(room);
-  const selected = state.config.boardCells.find((cell) => cell.id === room.selectedEntityId) || state.config.boardCells[0];
+  const acting = currentPlayer(room);
+  const selected = state.config.boardCells.find((cell) => cell.id === room.selectedEntityId) || state.config.boardCells[acting?.position || 0] || state.config.boardCells[0];
   const contractReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["contract", "client"] }) : "Вы не в комнате.";
   const tenderReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["tender"] }) : "Вы не в комнате.";
   const playerCount = String(Math.max(2, Math.min(6, room.players.length || 2)));
   const openContracts = state.config.settings?.contractsByPlayers?.[playerCount] || 5;
   const openTenders = state.config.settings?.tendersByPlayers?.[playerCount] || 1;
   return `
-    <section class="gameLayout">
-      ${turnOverlayMarkup(room)}
+    <section class="gameLayout gameShell">
+      ${topBarMarkup(room, selected)}
       ${playerRailMarkup(room)}
       <div class="boardPanel">${boardMarkup(room)}</div>
-      <div class="marketPanel">
-        <div class="dealColumns">
-          <section class="deckColumn"><h3>Открытые контракты</h3>${state.config.contracts
-            .slice(0, openContracts)
-            .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять контракт", disabled: Boolean(contractReason), reason: contractReason }))
-            .join("")}</section>
-          <section class="deckColumn"><h3>Тендер дня</h3>${state.config.tenders
-            .slice(0, openTenders)
-            .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason }))
-            .join("")}</section>
-        </div>
-      </div>
-      <aside class="inspector">
-        <span class="kicker">Выбрано</span>
-        <h2>${escapeHtml(selected.title)}</h2>
-        <p>${escapeHtml(selected.description)}</p>
-        <button class="primaryButton" data-open-cell="${selected.id}">Открыть действие клетки</button>
-        <div class="metaList"><span>Тип: ${escapeHtml(selected.type)}</span><span>День: ${room.day}</span><span>Роль: ${user.role === "admin" ? "админ" : "игрок"}</span></div>
-        <h3>Журнал</h3>
-        <div class="logList">${room.log.slice(0, 8).map((line) => `<p>${escapeHtml(line)}</p>`).join("")}</div>
-      </aside>
+      ${marketTerminalMarkup(room, openContracts, openTenders, contractReason, tenderReason)}
       ${playerDockMarkup(room)}
+      ${sidePanelMarkup(room)}
     </section>`;
 }
 
-function turnOverlayMarkup(room) {
-  const actingPlayer = currentPlayer(room);
+function turnPhase(room, selected) {
   const mine = userPlayer(room);
   const myTurn = canUserAct(room);
-  const rolled = Boolean(room.turnState?.rolled);
   const turnState = normalizeTurnState(room.turnState);
-  return `<aside class="turnOverlay" data-turn="${room.currentTurn}-${room.day}">
+  if (!myTurn) return { id: "WAITING", label: "Ожидание", cta: "Не ваш ход", hint: `Ожидайте, сейчас ходит ${currentPlayer(room)?.name || "другой игрок"}.`, action: null };
+  if (!turnState.rolled) return { id: "ROLL", label: "Бросок", cta: "Бросить кубики", hint: "Бросьте 2D6, чтобы перейти на клетку.", action: "roll" };
+  if (!turnState.cellActionUsed) return { id: "CELL_ACTION", label: "Клетка", cta: "Открыть действие клетки", hint: `Вы на клетке "${selected?.title || ""}". Откройте действие или переходите к коммерции.`, action: "open-cell", cellId: selected?.id };
+  if (!turnState.commercialActionUsed) return { id: "COMMERCIAL_ACTION", label: "Коммерция", cta: "Выбрать коммерческое действие", hint: "Сделайте одно коммерческое действие: ресурс, контракт, поставка, hedge или брокерка.", action: "commercial" };
+  return { id: "TURN_END_READY", label: "Финал", cta: "Завершить ход", hint: "Основные действия выполнены. Завершите ход.", action: "end-turn" };
+}
+
+function topBarMarkup(room, selected) {
+  const actingPlayer = currentPlayer(room);
+  const turnState = normalizeTurnState(room.turnState);
+  const phase = turnPhase(room, selected);
+  const disabled = phase.action ? "" : "disabled";
+  return `<header class="topBar" data-turn="${room.currentTurn}-${room.day}">
     <div class="turnTimer"><i></i></div>
-    <div class="turnOverlayMain">
+    <div class="topBarMain">
+      ${proleumLogo}
+      <div class="dayBadge"><span>Торговый день</span><strong>${room.day}</strong></div>
       <div class="turnIdentity">
-        <span class="kicker">Сейчас ходит</span>
+        <span class="kicker">Ходит</span>
         <h2>${escapeHtml(actingPlayer?.name || "Нет игроков")}</h2>
-        <p>${myTurn ? "Ваш ход: бросок, действие клетки и одно коммерческое решение." : mine ? "Ожидайте свой ход. Ваши кнопки заблокированы." : "Вы наблюдатель этой комнаты."}</p>
+        <p>${escapeHtml(phase.hint)}</p>
       </div>
       <div class="turnChecklist">
-        <span class="${turnState.rolled ? "done" : ""}">Бросок</span>
-        <span class="${turnState.cellActionUsed ? "done" : ""}">Клетка</span>
-        <span class="${turnState.commercialActionUsed ? "done" : ""}">Коммерция</span>
+        <span class="${turnState.rolled ? "done" : ""} ${phase.id === "ROLL" ? "active" : ""}">Бросок</span>
+        <span class="${turnState.cellActionUsed ? "done" : ""} ${phase.id === "CELL_ACTION" ? "active" : ""}">Клетка</span>
+        <span class="${turnState.commercialActionUsed ? "done" : ""} ${phase.id === "COMMERCIAL_ACTION" ? "active" : ""}">Коммерция</span>
+        <span class="${phase.id === "TURN_END_READY" ? "active" : ""}">Финал</span>
       </div>
       <div class="diceConsole ${diceState ? "isRolling" : ""}">
         <div class="dicePair"><span>${diceState?.a || "?"}</span><span>${diceState?.b || "?"}</span></div>
-        <button class="primaryButton turnButton" data-action="roll" ${myTurn && !rolled ? "" : "disabled"}>${!myTurn ? "Не ваш ход" : rolled ? "Бросок сделан" : "Бросить 2D6"}</button>
       </div>
       <div class="turnActions">
-        <button class="primaryButton" data-action="end-turn" ${myTurn ? "" : "disabled"}>Завершить ход</button>
-        <button class="secondaryButton" data-action="next-day" ${user.role === "admin" ? "" : "disabled"}>День +1</button>
+        <button class="primaryButton topCta" data-action="${phase.action || "noop"}" data-cell-id="${phase.cellId || ""}" ${disabled}>${escapeHtml(phase.cta)}</button>
+        <button class="secondaryButton iconButton" data-side-panel="log">Лог</button>
+        <button class="secondaryButton iconButton" data-view="rules">Правила</button>
+        ${user.role === "admin" ? `<button class="secondaryButton iconButton" data-side-panel="dev">Dev panel</button>` : ""}
       </div>
     </div>
-  </aside>`;
+  </header>`;
 }
 
 function boardMarkup(room) {
@@ -623,7 +630,6 @@ function boardMarkup(room) {
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   const myTurn = canUserAct(room);
   const player = currentPlayer(room);
-  const resourceReason = player ? actionGate(room, player, { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Нет игрока.";
   return `
     <div class="board">
       ${state.config.boardCells
@@ -631,8 +637,10 @@ function boardMarkup(room) {
           const players = room.players.filter((player) => player.position === index);
           const owner = room.assetOwnership?.[cell.id];
           const isStanding = player?.position === index;
+          const shortTitle = cell.title.length > 34 ? `${cell.title.slice(0, 31)}...` : cell.title;
           return `<button class="boardCell type-${cell.type} ${owner ? "ownedCell" : ""} ${isStanding ? "currentCell" : ""}" data-cell="${cell.id}">
-            <span>${index + 1}</span><strong>${escapeHtml(cell.title)}</strong>
+            ${owner ? `<i class="ownerStrip" style="background:${owner.ownerId ? room.players.find((item) => item.id === owner.ownerId)?.color || "#ffcc00" : "#ffcc00"}"></i>` : ""}
+            <span>${index + 1}</span><strong title="${escapeHtml(cell.title)}">${escapeHtml(shortTitle)}</strong>
             ${owner ? `<em>${escapeHtml(owner.ownerName)}</em>` : ""}
             <div class="tokens">${players.map((player) => `<i style="background:${player.color}" title="${escapeHtml(player.name)}"></i>`).join("")}</div>
           </button>`;
@@ -640,37 +648,65 @@ function boardMarkup(room) {
         .join("")}
       <div class="boardCenter">
         <div class="boardLogo">${proleumLogo}<span>торговый день ${room.day}</span></div>
-        <div class="centerMarket">
-          <div class="centerSection">
-            <h3>Рынок ресурса</h3>
-            <div class="resourceGrid compact">
-              ${Object.entries(resourceMeta)
-                .map(
-                  ([code, meta]) => {
-                    const price = market.prices[code];
-                    const delta = price - meta.basePrice;
-                    return `<button class="resourceTile ${delta > 0 ? "priceUp" : delta < 0 ? "priceDown" : "priceFlat"}" style="border-color:${meta.color}" data-buy-resource="${code}" ${resourceReason ? "disabled" : ""} title="${escapeHtml(resourceReason || `Остаток: ${market.stock[code]} жетонов`)}">
-                    <strong>${code}</strong>
-                    <span class="tickerPrice">${price} млн ${delta ? `<b>${delta > 0 ? "▲" : "▼"} ${Math.abs(delta)}</b>` : `<b>• 0</b>`}</span>
-                    <small>база ${meta.basePrice} · остаток ${market.stock[code]}</small><em>Купить</em>
-                  </button>`;
-                  },
-                )
-                .join("")}
-            </div>
-          </div>
-          <div class="centerSection">
-            <h3>Логистика</h3>
-            <div class="logisticsGrid compact"><div>ЖД <strong>${Math.max(0, market.logistics.rail - market.usedLogistics.rail)}/${market.logistics.rail}</strong></div><div>База <strong>${Math.max(0, market.logistics.depot - market.usedLogistics.depot)}/${market.logistics.depot}</strong></div></div>
-          </div>
-          <details class="marketEvent">
-            <summary>${escapeHtml(marketCard.title)}</summary>
-            <p>${escapeHtml(marketCard.description)}</p>
-            <small>${escapeHtml(marketCard.effect || "")}</small>
-          </details>
+        <div class="centerMarket boardSummary">
+          <button class="marketEvent gameCard cardM marketDayCard" data-open-card="marketCard:${marketCard.id}">
+            <span>Карта рынка</span>
+            <strong>${escapeHtml(marketCard.title)}</strong>
+            <small>${escapeHtml(marketCard.effect || marketCard.description)}</small>
+          </button>
+          <div class="logisticsGrid compact"><div>ЖД <strong>${Math.max(0, market.logistics.rail - market.usedLogistics.rail)}/${market.logistics.rail}</strong></div><div>Нефтебаза <strong>${Math.max(0, market.logistics.depot - market.usedLogistics.depot)}/${market.logistics.depot}</strong></div></div>
         </div>
       </div>
     </div>`;
+}
+
+function marketTerminalMarkup(room, openContracts, openTenders, contractReason, tenderReason) {
+  normalizeMarket(room);
+  const market = room.market;
+  const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
+  const resourceReason = userPlayer(room) ? actionGate(room, userPlayer(room), { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Вы не в комнате.";
+  return `<aside class="marketPanel marketTerminal">
+    <header class="terminalHeader"><div><span>Market Terminal</span><strong>PROLEUM Index</strong></div><button class="ghostButton" data-open-card="marketCard:${marketCard.id}">Карта дня</button></header>
+    <button class="terminalDayCard" data-open-card="marketCard:${marketCard.id}">
+      <span>${escapeHtml(marketCard.title)}</span>
+      <strong>${escapeHtml(marketCard.effect || marketCard.description)}</strong>
+    </button>
+    <section class="tickerPanel">
+      <h3>Ресурсы</h3>
+      ${Object.entries(resourceMeta)
+        .map(([code, meta]) => {
+          const price = market.prices[code];
+          const delta = price - meta.basePrice;
+          return `<button class="tickerRow ${delta > 0 ? "priceUp" : delta < 0 ? "priceDown" : "priceFlat"}" data-buy-resource="${code}" ${resourceReason ? "disabled" : ""} title="${escapeHtml(resourceReason || `Купить ${code}`)}">
+            <span class="tickerCode">${code}</span>
+            <strong>${price} млн</strong>
+            <span>${market.stock[code]} шт</span>
+            <em>${delta > 0 ? "▲" : delta < 0 ? "▼" : "•"}${delta ? Math.abs(delta) : "0"}</em>
+            <b>Купить</b>
+          </button>`;
+        })
+        .join("")}
+    </section>
+    <section class="terminalLogistics">
+      <h3>Логистика</h3>
+      ${logisticMeter("ЖД", market.logistics.rail, market.usedLogistics.rail)}
+      ${logisticMeter("Нефтебаза", market.logistics.depot, market.usedLogistics.depot)}
+    </section>
+    <section class="terminalDeck"><h3>Открытые контракты</h3><div class="terminalScroll">${state.config.contracts
+      .slice(0, openContracts)
+      .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять", disabled: Boolean(contractReason), reason: contractReason, source: "market" }))
+      .join("")}</div></section>
+    <section class="terminalDeck tenderDeck"><h3>Тендер дня</h3>${state.config.tenders
+      .slice(0, openTenders)
+      .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason, source: "market" }))
+      .join("")}</section>
+  </aside>`;
+}
+
+function logisticMeter(label, total, used) {
+  const left = Math.max(0, total - used);
+  const percent = total ? Math.round((left / total) * 100) : 0;
+  return `<div class="logisticMeter"><div><span>${label}</span><strong>${left}/${total}</strong></div><i><b style="width:${percent}%"></b></i></div>`;
 }
 
 function entityCardMarkup(entity, compact = false, action = null) {
@@ -683,7 +719,7 @@ function entityCardMarkup(entity, compact = false, action = null) {
     ? `<button class="cardAction" data-${action.action}="${entity.id}" ${action.disabled ? "disabled" : ""} title="${escapeHtml(action.reason || "")}">${escapeHtml(action.label)}</button>${action.disabled && action.reason ? `<small class="lockReason">${escapeHtml(action.reason)}</small>` : ""}`
     : "";
   return `
-    <article class="entityCard ${compact ? "compact" : ""}">
+    <article class="entityCard gameCard cardM ${compact ? "compact" : ""}" data-open-card="${action?.source || "entity"}:${entity.id}">
       <div><span>${escapeHtml(entity.type)}</span><strong>${escapeHtml(entity.title)}</strong></div>
       <p>${escapeHtml(entity.description)}</p>
       ${meta}
@@ -711,16 +747,19 @@ function playerRailMarkup(room) {
 }
 
 function playerDockMarkup(room) {
+  const mine = userPlayer(room);
+  if (!mine) return "";
   return `<aside class="playerDock">
-    <div class="dockHandle">Планшеты игроков</div>
+    <div class="dockHandle">Моя компания · ${escapeHtml(mine.name)}</div>
     <div class="tabletStack">
-      ${room.players.map((player) => playerTabletMarkup(room, player, currentPlayer(room)?.id === player.id)).join("")}
+      ${playerTabletMarkup(room, mine, currentPlayer(room)?.id === mine.id)}
     </div>
   </aside>`;
 }
 
-function cardSlot(content, label, className = "") {
-  return `<div class="cardSlot ${className} ${content ? "filled" : "empty"}">${content || `<span>${escapeHtml(label)}</span>`}</div>`;
+function cardSlot(content, label, className = "", cardRef = "") {
+  const attr = cardRef ? `data-open-card="${escapeHtml(cardRef)}"` : "";
+  return `<button class="cardSlot gameCard ${className} ${content ? "filled" : "empty"}" ${attr} ${cardRef ? "" : "disabled"}>${content || `<span>${escapeHtml(label)}</span>`}</button>`;
 }
 
 function miniContractCard(room, player, contract) {
@@ -737,13 +776,15 @@ function miniContractCard(room, player, contract) {
 
 function playerTabletMarkup(room, player, isCurrent) {
   const activeLimit = state.config?.settings?.activeContractLimit || 2;
-  const contractSlots = Array.from({ length: activeLimit }, (_, index) => cardSlot(player.activeContracts[index] ? miniContractCard(room, player, player.activeContracts[index]) : "", `Контракт ${index + 1}`, "dealSlot")).join("");
-  const proleumSlots = Array.from({ length: 3 }, (_, index) => cardSlot(player.proleumCards[index] ? `<strong>${escapeHtml(player.proleumCards[index].title)}</strong><small>${escapeHtml(player.proleumCards[index].effect || player.proleumCards[index].description)}</small>` : "", `ПРОЛЕУМ ${index + 1}`, "proleumSlot")).join("");
-  const hedgeSlots = Array.from({ length: state.config?.settings?.hedgeLimit || 2 }, (_, index) => cardSlot(player.hedgeTokens[index] ? `<strong>${player.hedgeTokens[index].resource}</strong><small>хедж цены x2</small>` : "", `Hedge ${index + 1}`, "hedgeSlot")).join("");
-  const assetSlots = Array.from({ length: 4 }, (_, index) => cardSlot(player.assets[index] ? `<strong>${escapeHtml(player.assets[index].title)}</strong><small>${escapeHtml(player.assets[index].type)}</small>` : "", `Актив ${index + 1}`, "assetSlot")).join("");
+  const contractSlots = Array.from({ length: activeLimit }, (_, index) => cardSlot(player.activeContracts[index] ? miniContractCard(room, player, player.activeContracts[index]) : "", `Контракт ${index + 1}`, "dealSlot cardM", player.activeContracts[index] ? `activeContract:${player.activeContracts[index].instanceId}` : "")).join("");
+  const proleumSlots = Array.from({ length: 3 }, (_, index) => cardSlot(player.proleumCards[index] ? `<strong>${escapeHtml(player.proleumCards[index].title)}</strong><small>${escapeHtml(player.proleumCards[index].effect || player.proleumCards[index].description)}</small>` : "", `ПРОЛЕУМ ${index + 1}`, "proleumSlot cardM", player.proleumCards[index] ? `proleum:${player.proleumCards[index].id}` : "")).join("");
+  const hedgeSlots = (player.hedgeTokens || []).length
+    ? `<section class="tabletZone"><h4>Hedge MOEX</h4><div class="slotGrid proleumSlots">${Array.from({ length: state.config?.settings?.hedgeLimit || 2 }, (_, index) => cardSlot(player.hedgeTokens[index] ? `<strong>${player.hedgeTokens[index].resource}</strong><small>хедж цены x2</small>` : "", `Hedge ${index + 1}`, "hedgeSlot cardM", player.hedgeTokens[index] ? `hedge:${index}` : "")).join("")}</div></section>`
+    : "";
+  const assetSlots = Array.from({ length: Math.max(4, player.assets.length) }, (_, index) => cardSlot(player.assets[index] ? `<strong>${escapeHtml(player.assets[index].title)}</strong><small>${escapeHtml(player.assets[index].type)}</small>` : "", `Актив ${index + 1}`, "assetSlot cardM", player.assets[index] ? `asset:${player.assets[index].id}` : "")).join("");
   const warehouseSlots = Array.from({ length: warehouseCapacity(player) }, (_, index) => {
     const expanded = Object.entries(player.warehouse || {}).flatMap(([code, amount]) => Array.from({ length: amount }, () => code));
-    return cardSlot(expanded[index] ? `<strong>${expanded[index]}</strong><small>ресурс</small>` : "", "склад", "warehouseSlot");
+    return cardSlot(expanded[index] ? `<strong>${expanded[index]}</strong><small>ресурс</small>` : "", "склад", "warehouseSlot cardS", expanded[index] ? `warehouse:${expanded[index]}` : "");
   }).join("");
   return `<article class="playerTablet ${isCurrent ? "current" : ""}">
     <header class="tabletHeader"><div><i style="background:${player.color}"></i><strong>${escapeHtml(player.name)}</strong></div><span>${isCurrent ? "ходит" : "ожидает"}</span></header>
@@ -757,7 +798,7 @@ function playerTabletMarkup(room, player, isCurrent) {
     <section class="tabletZone wide"><h4>Активные сделки</h4><div class="slotGrid dealSlots">${contractSlots}</div></section>
     <section class="tabletZone"><h4>Склад ${warehouseUsed(player)}/${warehouseCapacity(player)}</h4><div class="slotGrid warehouseSlots">${warehouseSlots}</div></section>
     <section class="tabletZone"><h4>Карты ПРОЛЕУМ</h4><div class="slotGrid proleumSlots">${proleumSlots}</div></section>
-    <section class="tabletZone"><h4>Hedge MOEX</h4><div class="slotGrid proleumSlots">${hedgeSlots}</div></section>
+    ${hedgeSlots}
     <section class="tabletZone wide"><h4>Активы и история</h4><div class="slotGrid assetSlots">${assetSlots}</div><div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div></section>
   </article>`;
 }
@@ -773,10 +814,127 @@ function playersMarkup(players) {
   </div></section>`;
 }
 
+function sidePanelMarkup(room) {
+  if (!sidePanel) return "";
+  if (sidePanel === "log") {
+    return `<aside class="sideDrawer" data-modal-body>
+      <header><div><span>Журнал партии</span><strong>Операционная лента</strong></div><button class="modalClose" data-side-panel="">×</button></header>
+      <div class="drawerList">${room.log.map((line, index) => `<p><span>#${room.log.length - index}</span>${escapeHtml(line)}</p>`).join("")}</div>
+    </aside>`;
+  }
+  if (sidePanel === "dev" && user.role === "admin") {
+    return `<aside class="sideDrawer devDrawer" data-modal-body>
+      <header><div><span>Admin only</span><strong>Dev panel</strong></div><button class="modalClose" data-side-panel="">×</button></header>
+      <div class="drawerList">
+        <button class="primaryButton" data-action="next-day">Следующий торговый день</button>
+        <button class="secondaryButton" data-action="dismiss-turn-prompt">Скрыть подсказку хода</button>
+        <button class="secondaryButton" data-view="editor">Редактор контента</button>
+        <button class="secondaryButton" data-side-panel="log">Экспорт/просмотр лога</button>
+      </div>
+    </aside>`;
+  }
+  return "";
+}
+
+function findCardByRef(ref) {
+  const room = activeRoom();
+  const mine = room ? userPlayer(room) : null;
+  const [zone, id] = String(ref || "").split(":");
+  if (zone === "market" || zone === "entity") {
+    return state.config.contracts.find((item) => item.id === id) || state.config.tenders.find((item) => item.id === id);
+  }
+  if (zone === "marketCard") return state.config.marketCards.find((item) => item.id === id);
+  if (zone === "activeContract") return mine?.activeContracts.find((item) => item.instanceId === id);
+  if (zone === "proleum") return mine?.proleumCards.find((item) => item.id === id);
+  if (zone === "asset") return mine?.assets.find((item) => item.id === id);
+  if (zone === "hedge") return mine?.hedgeTokens?.[Number(id)];
+  if (zone === "warehouse") return { id: ref, title: id, type: "Ресурс", description: "Ресурс на складе вашей компании.", resource: { [id]: 1 } };
+  return null;
+}
+
+function expandedCardMarkup(ref) {
+  const room = activeRoom();
+  const mine = room ? userPlayer(room) : null;
+  const card = findCardByRef(ref);
+  if (!card) return "";
+  const [zone] = String(ref).split(":");
+  const resources = card.resource ? `<div class="resourceLine expanded">${Object.entries(card.resource).map(([code, amount]) => `<span>${code} x${amount}</span>`).join("")}</div>` : "";
+  const routes = card.routes?.length ? `<div class="routeLine">${card.routes.map((route) => `<span>${escapeHtml(route)}</span>`).join("")}</div>` : "";
+  const progress = zone === "activeContract" ? `<div class="progressTrack"><i style="width:${Math.round((resourceTotal(card.filled) / Math.max(1, resourceTotal(card.resource))) * 100)}%"></i></div>` : "";
+  const actions = expandedCardActions(room, mine, card, ref);
+  return `<div class="modalBackdrop cardBackdrop" data-action="close-modal">
+    <section class="modalSheet cardSheet gameCard cardL" data-modal-body>
+      <button class="modalClose" data-action="close-modal">×</button>
+      <span class="cardType">${escapeHtml(card.type || zone)}</span>
+      <h2>${escapeHtml(card.title || card.resource || "Карточка")}</h2>
+      <p>${escapeHtml(card.description || card.effect || "Подробности карточки.")}</p>
+      ${progress}
+      ${resources}
+      ${routes}
+      <div class="cardFacts">
+        ${card.income ? `<span>Доход <strong>${card.income} млн</strong></span>` : ""}
+        ${card.duration ? `<span>Срок <strong>${card.duration}</strong></span>` : ""}
+        ${card.risk !== undefined ? `<span>Риск <strong>${card.risk}</strong></span>` : ""}
+        ${card.brokerFee ? `<span>Брокерка <strong>${card.brokerFee} млн</strong></span>` : ""}
+      </div>
+      ${card.effect ? `<div class="hintBox">${escapeHtml(card.effect)}</div>` : ""}
+      <div class="modalActions">${actions}</div>
+    </section>
+  </div>`;
+}
+
+function actionButton(label, action, enabled, reason, dataset = "") {
+  return `<button class="${enabled ? "primaryButton" : "secondaryButton"}" ${dataset || `data-action="${action}"`} ${enabled ? "" : "disabled"} title="${escapeHtml(reason || "")}">${escapeHtml(label)}</button>${!enabled && reason ? `<small class="lockReason">${escapeHtml(reason)}</small>` : ""}`;
+}
+
+function expandedCardActions(room, mine, card, ref) {
+  if (!room || !mine) return actionButton("Только просмотр", "noop", false, "Вы не в комнате.");
+  const [zone] = String(ref).split(":");
+  if (zone === "market") {
+    const reason = actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["contract", "client"] });
+    return actionButton("Взять контракт", "", !reason, reason, `data-take-contract="${card.id}"`);
+  }
+  if (zone === "entity" && card.type === "тендер") {
+    const reason = actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["tender"] });
+    return actionButton("Заявиться", "", !reason, reason, `data-take-tender="${card.id}"`);
+  }
+  if (zone === "activeContract") {
+    const fillReason = actionGate(room, mine, { commercial: true });
+    const ready = isContractFilled(card);
+    return [
+      actionButton("Обеспечить ресурс", "", !fillReason && !ready, ready ? "Контракт уже обеспечен." : fillReason, `data-fill-contract="${card.instanceId}"`),
+      actionButton("Выбрать маршрут", "", !fillReason && ready, ready ? "" : "Сначала обеспечьте ресурс.", `data-plan-route="${card.instanceId}"`),
+      actionButton("Брокерка", "", !fillReason, fillReason, `data-action="broker-contract"`),
+    ].join("");
+  }
+  if (zone === "warehouse") return actionButton("Подсветить сделки", "noop", false, "Перекладывание ресурса в ручном режиме будет в следующем UX-слое.");
+  if (zone === "proleum") return actionButton("Сыграть карту", "noop", false, "Применение карты зависит от события или поставки.");
+  if (zone === "marketCard") return actionButton("Понятно", "close-modal", true, "", `data-action="close-modal"`);
+  return actionButton("Подробнее", "noop", false, "Для этой карточки пока доступен просмотр.");
+}
+
 function modalMarkup() {
   if (!modalState) return "";
   const room = activeRoom();
   const mine = room ? userPlayer(room) : null;
+  if (modalState.type === "card") return expandedCardMarkup(modalState.ref);
+  if (modalState.type === "commercial" && mine) {
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet cardSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="cardType">COMMERCIAL_ACTION</span>
+        <h2>Выберите коммерческое действие</h2>
+        <p>За ход доступно одно коммерческое действие. Недоступные варианты показывают причину блокировки.</p>
+        <div class="decisionGrid">
+          ${commercialActionOption(room, mine, "Закупить ресурс", "supplier, market")}
+          ${commercialActionOption(room, mine, "Взять контракт", "contract, client")}
+          ${commercialActionOption(room, mine, "Заявиться на тендер", "tender")}
+          ${commercialActionOption(room, mine, "Hedge MOEX", "hedge")}
+          ${commercialActionOption(room, mine, "Брокерка", "broker")}
+        </div>
+      </section>
+    </div>`;
+  }
   const myTurn = room ? canUserAct(room) : false;
   if (modalState.type === "cell") {
     const cell = state.config.boardCells.find((item) => item.id === modalState.cellId);
@@ -1060,8 +1218,31 @@ function bindCommon() {
   document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", () => navigator.clipboard?.writeText(button.dataset.copy)));
   document.querySelectorAll("[data-action='roll']").forEach((button) => button.addEventListener("click", roll));
   document.querySelector("[data-action='end-turn']")?.addEventListener("click", endTurn);
+  document.querySelector("[data-action='open-cell']")?.addEventListener("click", (event) => {
+    const cellId = event.currentTarget.dataset.cellId;
+    if (!cellId) return;
+    modalState = { type: "cell", cellId };
+    render();
+  });
+  document.querySelector("[data-action='commercial']")?.addEventListener("click", () => {
+    modalState = { type: "commercial" };
+    render();
+  });
   document.querySelector("[data-action='dismiss-turn-prompt']")?.addEventListener("click", dismissTurnPrompt);
   document.querySelector("[data-action='next-day']")?.addEventListener("click", nextDay);
+  document.querySelectorAll("[data-side-panel]").forEach((button) =>
+    button.addEventListener("click", () => {
+      sidePanel = button.dataset.sidePanel || null;
+      render();
+    }),
+  );
+  document.querySelectorAll("[data-open-card]").forEach((item) =>
+    item.addEventListener("click", (event) => {
+      if (event.target.closest("button") && event.target !== item && !event.target.matches(".cardSlot, .terminalDayCard, .marketDayCard")) return;
+      modalState = { type: "card", ref: item.dataset.openCard };
+      render();
+    }),
+  );
   document.querySelectorAll("[data-buy-resource]").forEach((button) =>
     button.addEventListener("click", () => {
       modalState = { type: "resource", code: button.dataset.buyResource };
@@ -1151,6 +1332,10 @@ function createPlayer(name, index) {
   };
 }
 
+function commercialActionOption(room, player, label, cellsText) {
+  return `<button class="routeOption" disabled><strong>${escapeHtml(label)}</strong><span>Доступно на клетках: ${escapeHtml(cellsText)}</span><small>Откройте действие текущей клетки или кликните подходящую карточку.</small></button>`;
+}
+
 function marketIncomeAdjustment(room, contract) {
   const card = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   const text = `${card?.effect || ""} ${card?.description || ""}`.toLowerCase();
@@ -1226,7 +1411,7 @@ function roll() {
     freshRoom.selectedEntityId = cell.id;
     freshRoom.turnState = normalizeTurnState({ rolled: true, promptDismissed: true });
     freshRoom.log.unshift(`${freshPlayer.name}: бросок ${value}, клетка "${cell.title}".`);
-    modalState = { type: "cell", cellId: cell.id };
+    modalState = null;
     diceState = null;
     commit();
   }, 850);
