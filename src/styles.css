@@ -411,9 +411,10 @@ textarea:focus {
 
 .gameLayout {
   display: grid;
-  grid-template-columns: minmax(460px, 0.95fr) minmax(420px, 1.1fr) 310px;
+  grid-template-columns: minmax(390px, 0.78fr) minmax(460px, 1fr) 300px;
   gap: 16px;
   align-items: start;
+  padding-bottom: 132px;
 }
 
 .boardPanel {
@@ -427,6 +428,7 @@ textarea:focus {
   grid-template-columns: repeat(11, minmax(38px, 1fr));
   grid-template-rows: repeat(11, minmax(38px, 1fr));
   aspect-ratio: 1;
+  max-height: calc(100vh - 150px);
   padding: 10px;
   background: #ffffff;
   border: 1px solid #d7d0bf;
@@ -522,6 +524,8 @@ textarea:focus {
   line-height: 1.08;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  hyphens: none;
+  overflow-wrap: normal;
 }
 
 .type-supplier,
@@ -566,7 +570,7 @@ textarea:focus {
 
 .boardCenter {
   position: absolute;
-  inset: 17%;
+  inset: 19%;
   display: grid;
   place-content: center;
   gap: 10px;
@@ -581,8 +585,23 @@ textarea:focus {
 }
 
 .boardCenter strong {
-  font-size: clamp(28px, 4vw, 54px);
+  font-size: clamp(24px, 2.7vw, 40px);
   color: inherit;
+}
+
+.boardCenter .proleumLogo {
+  justify-content: center;
+  gap: 10px;
+}
+
+.boardCenter .dotGrid {
+  grid-template-columns: repeat(3, 6px);
+  gap: 4px;
+}
+
+.boardCenter .dotGrid i {
+  width: 6px;
+  height: 6px;
 }
 
 .boardCenter span {
@@ -595,7 +614,8 @@ textarea:focus {
   gap: 14px;
 }
 
-.toolbar {
+.toolbar,
+.commandBar {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -603,8 +623,60 @@ textarea:focus {
   justify-content: space-between;
 }
 
-.toolbar h2 {
+.toolbar h2,
+.commandBar h2 {
   margin-bottom: 0;
+}
+
+.commandBar {
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #ddd7c8;
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(20, 17, 10, 0.08);
+}
+
+.commandBar p {
+  max-width: 420px;
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.diceConsole {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: #080808;
+  border-radius: 8px;
+}
+
+.dicePair {
+  display: flex;
+  gap: 6px;
+}
+
+.dicePair span,
+.diceAnimation span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: #080808;
+  background: #ffffff;
+  border: 2px solid #ffcc00;
+  border-radius: 8px;
+  font-weight: 900;
+}
+
+.diceConsole.isRolling .dicePair span,
+.diceAnimation span {
+  animation: diceShake 0.42s ease-in-out infinite;
+}
+
+.turnButton:disabled {
+  color: #8b8373;
+  background: #ece7dc;
 }
 
 .marketTablet {
@@ -635,6 +707,15 @@ textarea:focus {
   background: linear-gradient(180deg, #ffffff, #faf8ef);
   border: 1px solid;
   border-radius: 6px;
+  text-align: left;
+}
+
+.resourceTile em {
+  margin-top: 5px;
+  color: #0a0a0a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .resourceTile span {
@@ -678,6 +759,23 @@ textarea:focus {
   border-radius: 7px;
 }
 
+.cardAction {
+  justify-self: start;
+  min-height: 32px;
+  padding: 7px 10px;
+  color: #050505;
+  background: #ffcc00;
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cardAction:disabled,
+.resourceTile:disabled {
+  opacity: 0.48;
+}
+
 .entityCard.compact {
   padding: 11px;
 }
@@ -695,6 +793,66 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.activeDealsPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHead h3 {
+  margin-bottom: 0;
+}
+
+.activeDeal {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff, #fbfaf6);
+  border: 1px solid #ddd7c8;
+  border-radius: 8px;
+}
+
+.activeDeal span,
+.activeDeal small {
+  color: #77736a;
+}
+
+.progressTrack {
+  height: 8px;
+  overflow: hidden;
+  background: #ece7dc;
+  border-radius: 999px;
+}
+
+.progressTrack i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #111111, #ffcc00);
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+
+.dealActions,
+.modalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.emptyState {
+  padding: 18px;
+  color: #5d564b;
+  background: #f6f1df;
+  border: 1px dashed #d4c28d;
+  border-radius: 8px;
 }
 
 .resourceLine span {
@@ -864,6 +1022,208 @@ textarea:focus {
   background: #070707;
   border-radius: 6px;
   font-size: 12px;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(7px);
+}
+
+.modalSheet {
+  position: relative;
+  width: min(620px, 100%);
+  padding: 24px;
+  background: #fffdf6;
+  border: 1px solid #ffcc00;
+  border-radius: 10px;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.45);
+  animation: modalIn 0.18s ease-out;
+}
+
+.modalClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #0a0a0a;
+  background: #f1ead9;
+  border: 0;
+  border-radius: 999px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.decisionBox {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: #f7f0d4;
+  border: 1px solid #e7cf75;
+  border-radius: 8px;
+}
+
+.decisionBox p {
+  margin-bottom: 0;
+}
+
+.diceOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+}
+
+.diceOverlay p {
+  margin-top: 16px;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.diceAnimation {
+  display: flex;
+  gap: 12px;
+}
+
+.diceAnimation span {
+  width: 76px;
+  height: 76px;
+  font-size: 30px;
+}
+
+.playerDock {
+  position: fixed;
+  right: 24px;
+  bottom: 0;
+  z-index: 12;
+  width: min(920px, calc(100vw - 340px));
+  transform: translateY(calc(100% - 54px));
+  transition: transform 0.28s ease;
+}
+
+.playerDock:hover,
+.playerDock:focus-within {
+  transform: translateY(0);
+}
+
+.dockHandle {
+  width: max-content;
+  margin-left: auto;
+  padding: 11px 18px;
+  color: #050505;
+  background: #ffcc00;
+  border-radius: 10px 10px 0 0;
+  font-weight: 900;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.tabletStack {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  max-height: 58vh;
+  overflow: auto;
+  padding: 14px;
+  background: rgba(8, 8, 8, 0.94);
+  border: 1px solid #2d2a20;
+  border-radius: 10px 0 0 0;
+  box-shadow: 0 -20px 70px rgba(0, 0, 0, 0.34);
+}
+
+.playerTablet {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  color: #f8f6ef;
+  background: linear-gradient(180deg, #171717, #080808);
+  border: 1px solid #333027;
+  border-radius: 8px;
+}
+
+.playerTablet.current {
+  border-color: #ffcc00;
+  box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.42);
+}
+
+.playerTablet header,
+.playerTablet header div,
+.tabletStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playerTablet header {
+  justify-content: space-between;
+}
+
+.playerTablet header i {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.playerTablet header span {
+  color: #ffcc00;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tabletStats {
+  flex-wrap: wrap;
+}
+
+.tabletStats span,
+.tabletChips span,
+.tabletList span {
+  padding: 6px 8px;
+  color: #eee6d3;
+  background: #25231e;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.playerTablet summary {
+  cursor: pointer;
+  color: #ffcc00;
+  font-weight: 900;
+}
+
+.tabletChips,
+.tabletList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+@keyframes diceShake {
+  0% { transform: translateY(0) rotate(0deg); }
+  35% { transform: translateY(-5px) rotate(-8deg); }
+  70% { transform: translateY(3px) rotate(8deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 1280px) {
