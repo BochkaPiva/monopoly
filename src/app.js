@@ -1,4 +1,6 @@
-﻿const STORAGE_KEY = "proleum-monopoly-state-v1";
+import { defaultConfig, logisticsByPlayers, resourceMeta, resourceVolumesByPlayers } from "./game-data.js";
+
+const STORAGE_KEY = "proleum-monopoly-state-v1";
 const SESSION_KEY = "proleum-monopoly-user-v1";
 const palette = ["#1f7a5a", "#b7791f", "#365f91", "#8a3ffc", "#a83c3c", "#475569"];
 const entityLabels = {
@@ -10,148 +12,11 @@ const entityLabels = {
   proleumCards: "ПРОЛЕУМ",
   assets: "Активы",
 };
-const resourceMeta = {
-  REG: { name: "Регулярный бензин", basePrice: 3, color: "#2f7d58" },
-  PRM: { name: "Премиальный бензин", basePrice: 4, color: "#bd7a22" },
-  DTL: { name: "Дизельное топливо", basePrice: 4, color: "#365f91" },
-};
-const resourceVolumesByPlayers = {
-  2: { REG: 4, PRM: 3, DTL: 4 },
-  3: { REG: 5, PRM: 4, DTL: 5 },
-  4: { REG: 6, PRM: 5, DTL: 6 },
-  5: { REG: 7, PRM: 5, DTL: 7 },
-  6: { REG: 8, PRM: 6, DTL: 8 },
-};
-const logisticsByPlayers = {
-  2: { rail: 3, depot: 1 },
-  3: { rail: 4, depot: 2 },
-  4: { rail: 4, depot: 2 },
-  5: { rail: 5, depot: 3 },
-  6: { rail: 6, depot: 3 },
-};
 const proleumLogo = `
   <div class="proleumLogo" aria-label="ПРОЛЕУМ">
     <span class="dotGrid">${Array.from({ length: 9 }, () => "<i></i>").join("")}</span>
     <strong>ПРОЛЕУМ</strong>
   </div>`;
-const boardTypes = [
-  ["start", "Старт: новый торговый день"],
-  ["supplier", "Поставщик REG"],
-  ["event", "Операционное событие"],
-  ["client", "АЗС-сегмент"],
-  ["proleum", "Карты ПРОЛЕУМ"],
-  ["rail", "ЖД-узел Север"],
-  ["market", "Биржа ресурса"],
-  ["asset", "Брокерский контур"],
-  ["supplier", "Поставщик DTL"],
-  ["risk", "Проверка риска"],
-  ["pause", "Простой на станции"],
-  ["depot", "Нефтебаза Восток"],
-  ["contract", "Открытый контракт"],
-  ["supplier", "Поставщик PRM"],
-  ["tender", "Тендер дня"],
-  ["road", "Автомаршрут"],
-  ["event", "Операционное событие"],
-  ["client", "Агрохолдинг"],
-  ["market", "Биржа ресурса"],
-  ["proleum", "Планерка участников рынка"],
-  ["checkpoint", "Смена торгового дня"],
-  ["depot", "Нефтебаза Юг"],
-  ["contract", "Открытый контракт"],
-  ["rail", "ЖД-узел Центр"],
-  ["event", "Операционное событие"],
-  ["client", "Промышленный клиент"],
-  ["supplier", "Поставщик REG"],
-  ["asset", "Сервисный актив"],
-  ["market", "Биржа ресурса"],
-  ["risk", "Срочная логистика"],
-  ["penalty", "Срыв сроков"],
-  ["road", "Трасса Запад"],
-  ["contract", "Открытый контракт"],
-  ["depot", "Нефтебаза Север"],
-  ["proleum", "Карты ПРОЛЕУМ"],
-  ["client", "Федеральная сеть"],
-  ["rail", "ЖД-узел Восток"],
-  ["event", "Операционное событие"],
-  ["tender", "Тендерная комиссия"],
-  ["market", "Финиш торгового круга"],
-];
-
-const defaultConfig = {
-  rules: {
-    title: "ПРОЛЕУМ: Сделка на миллион тонн",
-    summary:
-      "Игроки управляют нефтетрейдинговыми компаниями: берут клиентские контракты, обеспечивают их ресурсом, выбирают маршрут поставки, управляют риском и зарабатывают деньги, репутацию, эффективность и влияние.",
-    setup: [
-      "Стартовый капитал: 25 млн. Склад: 3 ресурса. Шкалы: Репутация 3, Эффективность 3, Влияние 3.",
-      "На планшете рынка открываются 5 обычных контрактов, 1 тендер дня и первая карта рынка.",
-      "Ведущий рынка обновляет цены, объемы REG/PRM/DTL и логистическую мощность дня.",
-    ],
-    turn: [
-      "Игрок бросает кубики, перемещается по полю и выполняет действие клетки.",
-      "Коммерческие действия: взять контракт, обеспечить ресурс, закрыть поставку, развить актив, провести переговоры или сыграть карту ПРОЛЕУМ.",
-      "После хода всех игроков торговый день обновляется: новая карта рынка, ресурсы, логистика, открытые контракты и тендер.",
-    ],
-    scoring: [
-      "Капитал: каждые 5 млн = 1 победное очко.",
-      "Выполненные контракты: малый = 1, средний = 2, крупный = 3, тендер = 4.",
-      "Каждые 2 пункта Репутации, Эффективности и Влияния дают по 1 очку.",
-      "Сорванный контракт: -2 очка.",
-    ],
-    balance: [
-      "За один полный круг поля игрок может купить не более 1 нового актива.",
-      "Базовые действия не блокируются чужими активами: владелец получает комиссию, но не закрывает доступ.",
-      "Если нужного ресурса нет, можно купить срочный ресурс у банка по цене +2 млн за жетон.",
-      "Один ход - максимум одна сделка между игроками.",
-    ],
-  },
-  boardCells: boardTypes.map(([type, title], index) => ({
-    id: `cell-${index + 1}`,
-    title,
-    type,
-    description:
-      type === "start"
-        ? "Проход через старт запускает новый торговый день и выплату оборотного бонуса."
-        : "Клетка дает действие, усиление или возможность купить связанный актив.",
-  })),
-  contracts: [
-    card("contract-azs", "Сеть АЗС", "малый", "Быстрый контракт для проверки авто-логистики и базовой маржи.", { REG: 2 }, ["Авто", "ЖД"], 3, 12, "низкий", "+1 Репутация при чистой поставке."),
-    card("contract-agro", "Агрохолдинг", "средний", "Спрос на DTL, ограниченный ресурс и конкуренция за ЖД-мощность.", { DTL: 3 }, ["ЖД"], 4, 22, "средний", "+1 Рыночное влияние при поставке в срок."),
-    card("contract-industry", "Промышленное предприятие", "крупный", "Сложная поставка через ЖД и нефтебазу. Требует Репутацию 4+.", { DTL: 2, PRM: 1 }, ["ЖД + нефтебаза"], 5, 28, "высокий", "+1 Эффективность при успешной поставке."),
-  ],
-  tenders: [
-    card("tender-million-ton", "Тендер: миллион тонн", "тендер", "Открытая крупная сделка. Забирает тот, кто первым собрал ресурс и провел поставку.", { REG: 2, DTL: 2, PRM: 1 }, ["ЖД", "ЖД + нефтебаза"], 5, 36, "высокий", "+2 Рыночное влияние победителю тендера."),
-  ],
-  marketCards: [
-    simple("market-dtl-season", "Сезонный спрос на DTL", "рынок", "DTL дорожает, аграрные контракты становятся выгоднее.", "DTL цена +1, объем -1. Агрохолдинги дают +2 млн дохода."),
-    simple("market-reg-surplus", "Избыток REG", "рынок", "REG доступен дешевле, быстрые малые сделки ускоряются.", "REG цена -1, объем +2. Малые контракты можно брать без комиссии."),
-    simple("market-rail-pressure", "Давление на ЖД", "рынок", "Провозная мощность ограничена, альтернативные маршруты дороже.", "ЖД-мощность -1. Срочная ЖД стоит +3 млн вместо +2 млн."),
-  ],
-  events: [
-    simple("event-etran", "Сбой ЭТРАН", "операционное событие", "Выберите: заплатить 2 млн и провести поставку; потерять 1 ход срока; потратить 1 Репутацию и сохранить клиента."),
-    simple("event-station", "Станция перегружена", "операционное событие", "Заплатите 3 млн за альтернативный маршрут, используйте нефтебазу за 1 млн или отложите поставку до следующего хода."),
-    simple("event-idle", "Клиент спорит по простою", "операционное событие", "Заплатите 2 млн или потеряйте 1 Репутацию. Карта ПРОЛЕУМ может отменить потерю."),
-  ],
-  proleumCards: [
-    simple("proleum-basis", "Альтернативный базис найден", "ПРОЛЕУМ", "Играть при закрытии контракта.", "Снизьте риск сделки на 1 или уменьшите стоимость логистики на 2 млн."),
-    simple("proleum-margin", "Сервис спас маржу", "ПРОЛЕУМ", "Играть после операционного события.", "Отмените денежный штраф до 3 млн, но не отменяйте событие полностью."),
-    simple("proleum-window", "Окно в логистике", "ПРОЛЕУМ", "Играть при закрытии через ЖД/нефтебазу.", "Используйте мощность даже если жетоны закончились. Доплатите 1 млн."),
-  ],
-  assets: [
-    asset("asset-depot", "Нефтебаза", 12, "Увеличивает склад, упрощает крупные поставки и приносит комиссию.", "Владелец получает +2 к складу. Другие игроки платят 1 млн при использовании."),
-    asset("asset-rail", "ЖД-узел", 10, "Дает скидку на ЖД и окно для срочных перевозок.", "Раз в день снижает свою ЖД-поставку на 1 млн. Другие платят комиссию."),
-    asset("asset-broker", "Брокерский контур", 8, "Помогает спасать сложные контракты и зарабатывать на чужой брокерке.", "Чужая брокерка приносит 1 млн комиссии."),
-  ],
-  components: [
-    simple("component-board", "Игровое поле", "1 шт.", "480x480 мм, 40 клеток."),
-    simple("component-market", "Планшет рынка", "1 шт.", "Цены, ресурсы, логистика, открытые контракты, тендер."),
-    simple("component-tablets", "Планшеты игроков", "6 шт.", "Деньги, склад, активные контракты, активы, 3 шкалы."),
-    simple("component-cards", "Карты всего", "190 карт", "60 контрактов, 18 тендеров, 30 рынка, 40 событий, 30 ПРОЛЕУМ, 12 активов."),
-    simple("component-tokens", "Ресурсные жетоны", "120 шт.", "REG / PRM / DTL по 40 шт."),
-    simple("component-logistics", "Сроки и мощности", "86 шт.", "50 сроков, 10 ЖД, 6 нефтебаза, 20 продлено."),
-  ],
-};
-
 let state = loadState();
 let user = loadUser();
 let view = "rooms";
@@ -274,7 +139,7 @@ function escapeHtml(value = "") {
 function scorePlayer(player) {
   return (
     Math.floor(player.money / 5) +
-    (player.completedContracts || []).reduce((sum, contract) => sum + ({ "малый": 1, "средний": 2, "крупный": 3, "тендер": 4 }[contract.type] || 1), 0) +
+    (player.completedContracts || []).reduce((sum, contract) => sum + (contract.brokered ? 1 : contract.victoryPoints || { "малый": 1, "средний": 2, "крупный": 3, "тендер": 4 }[contract.type] || 1), 0) +
     Math.floor(player.reputation / 2) +
     Math.floor(player.efficiency / 2) +
     Math.floor(player.influence / 2) -
@@ -297,7 +162,9 @@ function applyStartupRoute() {
 }
 
 function normalizeState(nextState) {
-  nextState.config ||= clone(defaultConfig);
+  if (!nextState.config || nextState.config.version !== defaultConfig.version) {
+    nextState.config = clone(defaultConfig);
+  }
   nextState.rooms ||= [];
   nextState.rooms.forEach((room) => {
     room.day ||= 1;
@@ -317,7 +184,7 @@ function normalizePlayer(player, index = 0) {
   player.id ||= uid("player");
   player.color ||= palette[index % palette.length];
   player.position ||= 0;
-  player.money ??= 25;
+  player.money ??= state.config?.settings?.startingMoney || 25;
   player.reputation ??= 3;
   player.efficiency ??= 3;
   player.influence ??= 3;
@@ -327,6 +194,8 @@ function normalizePlayer(player, index = 0) {
   player.failedContracts ||= [];
   player.assets ||= [];
   player.proleumCards ||= [];
+  player.hedgeTokens ||= [];
+  player.brokeredContracts ||= [];
   player.lap ??= 0;
   player.assetPurchasedLap ??= -1;
 }
@@ -376,17 +245,14 @@ function normalizeMarket(room) {
 
 function applyMarketCardEffect(prices, stock, logistics, marketCard) {
   if (!marketCard) return;
-  if (marketCard.id === "market-dtl-season") {
-    prices.DTL += 1;
-    stock.DTL = Math.max(0, stock.DTL - 1);
-  }
-  if (marketCard.id === "market-reg-surplus") {
-    prices.REG = Math.max(1, prices.REG - 1);
-    stock.REG += 2;
-  }
-  if (marketCard.id === "market-rail-pressure") {
-    logistics.rail = Math.max(0, logistics.rail - 1);
-  }
+  Object.entries(marketCard.priceDelta || {}).forEach(([code, delta]) => {
+    prices[code] = Math.max(1, (prices[code] || resourceMeta[code]?.basePrice || 1) + Number(delta || 0));
+  });
+  Object.entries(marketCard.stockDelta || {}).forEach(([code, delta]) => {
+    stock[code] = Math.max(0, (stock[code] || 0) + Number(delta || 0));
+  });
+  logistics.rail = Math.max(0, (logistics.rail || 0) + Number(marketCard.logisticsDelta?.rail || 0));
+  logistics.depot = Math.max(0, (logistics.depot || 0) + Number(marketCard.logisticsDelta?.depot || 0));
 }
 
 function currentPlayer(room) {
@@ -414,7 +280,12 @@ function cloneDeal(entity) {
     routes: clone(entity.routes || []),
     duration: entity.duration || 3,
     income: entity.income || 0,
-    risk: entity.risk || "низкий",
+    risk: entity.risk ?? 0,
+    category: entity.category || "",
+    size: entity.size || entity.type,
+    brokerFee: entity.brokerFee || 0,
+    victoryPoints: entity.victoryPoints || ({ "малый": 1, "средний": 2, "крупный": 3, "тендер": 4 }[entity.type] || 1),
+    requirement: entity.requirement || "",
     effect: entity.effect || "",
   };
 }
@@ -447,7 +318,7 @@ function warehouseUsed(player) {
 
 function warehouseCapacity(player) {
   const depotBonus = (player.assets || []).filter((item) => item.type === "depot").length * 2;
-  return 3 + depotBonus;
+  return (state.config?.settings?.warehouseBase || 3) + depotBonus;
 }
 
 function resourceBuyLimit(room, player) {
@@ -494,6 +365,12 @@ function cellTypeLabel(type) {
     contract: "контракт",
     client: "клиент",
     tender: "тендер",
+    hedge: "хедж MOEX",
+    broker: "брокерка",
+    marketCard: "карта рынка",
+    claim: "претензия",
+    meeting: "планерка",
+    block: "блокировка",
     rail: "ЖД-узел",
     depot: "нефтебаза",
     road: "автомаршрут",
@@ -508,7 +385,7 @@ function cellTypeLabel(type) {
 }
 
 function assetCostForCell(cell) {
-  const costs = { depot: 12, rail: 10, road: 8, client: 9, supplier: 9, asset: 8 };
+  const costs = { depot: 12, rail: 10, road: 7, client: 8, supplier: 8, broker: 9, asset: 8 };
   return costs[cell?.type] || 10;
 }
 
@@ -527,7 +404,7 @@ function routeOptions(room, contract) {
     const cost = 2 + Math.ceil(total / 2);
     options.push({ key: "rail", title: "ЖД", cost, rail: 1, depot: 0, risk: 1, available: availableRail >= 1, note: "Дешевле на объеме, но повышает операционный риск." });
   }
-  if (allowed.some((route) => route.includes("нефтебаза"))) {
+  if (allowed.some((route) => route.toLowerCase().includes("нефтебаза"))) {
     const cost = 3 + Math.ceil(total / 2);
     options.push({ key: "rail-depot", title: "ЖД + нефтебаза", cost, rail: 1, depot: 1, risk: 0, available: availableRail >= 1 && availableDepot >= 1, note: "Надежнее для крупных сделок, занимает две мощности." });
   }
@@ -536,7 +413,7 @@ function routeOptions(room, contract) {
 }
 
 function riskLevel(contract, route, player) {
-  const base = { "низкий": 0, "средний": 1, "высокий": 2, "тендер": 2 }[contract.risk] ?? 1;
+  const base = Number.isFinite(Number(contract.risk)) ? Number(contract.risk) : { "низкий": 0, "средний": 1, "высокий": 2, "тендер": 2 }[contract.risk] ?? 1;
   const efficiencyReduce = player.efficiency >= 5 ? 1 : 0;
   return Math.max(0, base + (route?.risk || 0) - efficiencyReduce);
 }
@@ -676,6 +553,9 @@ function gameMarkup(room) {
   const selected = state.config.boardCells.find((cell) => cell.id === room.selectedEntityId) || state.config.boardCells[0];
   const contractReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["contract", "client"] }) : "Вы не в комнате.";
   const tenderReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["tender"] }) : "Вы не в комнате.";
+  const playerCount = String(Math.max(2, Math.min(6, room.players.length || 2)));
+  const openContracts = state.config.settings?.contractsByPlayers?.[playerCount] || 5;
+  const openTenders = state.config.settings?.tendersByPlayers?.[playerCount] || 1;
   return `
     <section class="gameLayout">
       ${turnOverlayMarkup(room)}
@@ -684,11 +564,11 @@ function gameMarkup(room) {
       <div class="marketPanel">
         <div class="dealColumns">
           <section class="deckColumn"><h3>Открытые контракты</h3>${state.config.contracts
-            .slice(0, 5)
+            .slice(0, openContracts)
             .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять контракт", disabled: Boolean(contractReason), reason: contractReason }))
             .join("")}</section>
           <section class="deckColumn"><h3>Тендер дня</h3>${state.config.tenders
-            .slice(0, 1)
+            .slice(0, openTenders)
             .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason }))
             .join("")}</section>
         </div>
@@ -798,6 +678,7 @@ function entityCardMarkup(entity, compact = false, action = null) {
     ? `<div class="resourceLine">${Object.entries(entity.resource).map(([code, amount]) => `<span>${code} x${amount}</span>`).join("")}</div>`
     : "";
   const routes = entity.routes?.length ? `<div class="routeLine">${entity.routes.map((route) => `<span>${escapeHtml(route)}</span>`).join("")}</div>` : "";
+  const meta = entity.income ? `<div class="dealMetaLine"><span>${entity.income} млн</span><span>срок ${entity.duration}</span><span>риск ${entity.risk}</span>${entity.brokerFee ? `<span>брокерка ${entity.brokerFee}</span>` : ""}</div>` : "";
   const actionButton = action
     ? `<button class="cardAction" data-${action.action}="${entity.id}" ${action.disabled ? "disabled" : ""} title="${escapeHtml(action.reason || "")}">${escapeHtml(action.label)}</button>${action.disabled && action.reason ? `<small class="lockReason">${escapeHtml(action.reason)}</small>` : ""}`
     : "";
@@ -805,6 +686,7 @@ function entityCardMarkup(entity, compact = false, action = null) {
     <article class="entityCard ${compact ? "compact" : ""}">
       <div><span>${escapeHtml(entity.type)}</span><strong>${escapeHtml(entity.title)}</strong></div>
       <p>${escapeHtml(entity.description)}</p>
+      ${meta}
       ${resource}
       ${routes}
       ${entity.effect ? `<small>${escapeHtml(entity.effect)}</small>` : ""}
@@ -854,8 +736,10 @@ function miniContractCard(room, player, contract) {
 }
 
 function playerTabletMarkup(room, player, isCurrent) {
-  const contractSlots = Array.from({ length: 3 }, (_, index) => cardSlot(player.activeContracts[index] ? miniContractCard(room, player, player.activeContracts[index]) : "", `Контракт ${index + 1}`, "dealSlot")).join("");
+  const activeLimit = state.config?.settings?.activeContractLimit || 2;
+  const contractSlots = Array.from({ length: activeLimit }, (_, index) => cardSlot(player.activeContracts[index] ? miniContractCard(room, player, player.activeContracts[index]) : "", `Контракт ${index + 1}`, "dealSlot")).join("");
   const proleumSlots = Array.from({ length: 3 }, (_, index) => cardSlot(player.proleumCards[index] ? `<strong>${escapeHtml(player.proleumCards[index].title)}</strong><small>${escapeHtml(player.proleumCards[index].effect || player.proleumCards[index].description)}</small>` : "", `ПРОЛЕУМ ${index + 1}`, "proleumSlot")).join("");
+  const hedgeSlots = Array.from({ length: state.config?.settings?.hedgeLimit || 2 }, (_, index) => cardSlot(player.hedgeTokens[index] ? `<strong>${player.hedgeTokens[index].resource}</strong><small>хедж цены x2</small>` : "", `Hedge ${index + 1}`, "hedgeSlot")).join("");
   const assetSlots = Array.from({ length: 4 }, (_, index) => cardSlot(player.assets[index] ? `<strong>${escapeHtml(player.assets[index].title)}</strong><small>${escapeHtml(player.assets[index].type)}</small>` : "", `Актив ${index + 1}`, "assetSlot")).join("");
   const warehouseSlots = Array.from({ length: warehouseCapacity(player) }, (_, index) => {
     const expanded = Object.entries(player.warehouse || {}).flatMap(([code, amount]) => Array.from({ length: amount }, () => code));
@@ -873,6 +757,7 @@ function playerTabletMarkup(room, player, isCurrent) {
     <section class="tabletZone wide"><h4>Активные сделки</h4><div class="slotGrid dealSlots">${contractSlots}</div></section>
     <section class="tabletZone"><h4>Склад ${warehouseUsed(player)}/${warehouseCapacity(player)}</h4><div class="slotGrid warehouseSlots">${warehouseSlots}</div></section>
     <section class="tabletZone"><h4>Карты ПРОЛЕУМ</h4><div class="slotGrid proleumSlots">${proleumSlots}</div></section>
+    <section class="tabletZone"><h4>Hedge MOEX</h4><div class="slotGrid proleumSlots">${hedgeSlots}</div></section>
     <section class="tabletZone wide"><h4>Активы и история</h4><div class="slotGrid assetSlots">${assetSlots}</div><div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div></section>
   </article>`;
 }
@@ -975,16 +860,17 @@ function modalMarkup() {
     </div>`;
   }
   if (modalState.type === "eventChoice") {
+    const eventCard = state.config.events.find((item) => item.id === modalState.eventId) || modalState;
+    const choices = eventCard.choices?.length ? eventCard.choices : ["Заплатить и сохранить темп", "Потерять репутацию", "Принять задержку"];
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
         <span class="kicker">Операционное событие</span>
-        <h2>${escapeHtml(modalState.title)}</h2>
-        <p>${escapeHtml(modalState.description)}</p>
+        <h2>${escapeHtml(eventCard.title)}</h2>
+        <p>${escapeHtml(eventCard.description)}</p>
+        <div class="hintBox">Помогает: ${escapeHtml(eventCard.helps || "карты ПРОЛЕУМ / активы / шкалы компании")}</div>
         <div class="decisionGrid">
-          <button class="primaryButton" data-action="resolve-event" data-choice="pay">Заплатить и сохранить темп</button>
-          <button class="secondaryButton" data-action="resolve-event" data-choice="rep">Потерять репутацию</button>
-          <button class="secondaryButton" data-action="resolve-event" data-choice="delay">Принять задержку</button>
+          ${choices.map((choice, index) => `<button class="${index === 0 ? "primaryButton" : "secondaryButton"}" data-action="resolve-event" data-choice="${index}">${escapeHtml(choice)}</button>`).join("")}
         </div>
       </section>
     </div>`;
@@ -1011,14 +897,47 @@ function cellActionMarkup(cell, myTurn) {
   const disabled = myTurn ? "" : "disabled";
   if (["supplier", "market"].includes(cell.type)) {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["supplier", "market"] }) : "Недоступно.";
+    const owner = room?.assetOwnership?.[cell.id];
+    const assetGate = cell.type === "supplier" && room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["supplier"] }) : "Недоступно.";
+    const assetReason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : assetGate;
     return `<div class="modalActions">
       <button class="secondaryButton" data-buy-resource="REG" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить REG</button>
       <button class="secondaryButton" data-buy-resource="PRM" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить PRM</button>
       <button class="secondaryButton" data-buy-resource="DTL" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить DTL</button>
+      ${cell.type === "supplier" ? `<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${assetReason ? "disabled" : disabled} title="${escapeHtml(assetReason)}">Купить поставщика за ${assetCostForCell(cell)} млн</button>` : ""}
     </div>`;
   }
-  if (["asset", "depot", "rail", "road", "client"].includes(cell.type)) {
-    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["asset", "depot", "rail", "road", "client"] }) : "Недоступно.";
+  if (cell.type === "marketCard") {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["marketCard"] }) : "Недоступно.";
+    return `<div class="decisionBox"><strong>Карта рынка</strong><p>Откройте следующую карту рынка: цены, объемы и логистика пересчитаются по балансу из Excel.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-market" ${gate ? "disabled" : disabled}>Открыть карту рынка</button></div>`;
+  }
+  if (cell.type === "hedge") {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["hedge"] }) : "Недоступно.";
+    const code = cell.title.includes("PRM") ? "PRM" : cell.title.includes("DTL") ? "DTL" : "REG";
+    return `<div class="decisionBox"><strong>Hedge MOEX · ${code}</strong><p>Купите hedge за 1 млн: фикс цены до 2 ${code} для одного контракта. Лимит руки: ${state.config.settings?.hedgeLimit || 2}.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-buy-hedge="${code}" ${gate ? "disabled" : disabled}>Купить hedge ${code}</button></div>`;
+  }
+  if (cell.type === "broker") {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["broker"] }) : "Недоступно.";
+    const owner = room?.assetOwnership?.[cell.id];
+    const assetGate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["broker"] }) : "Недоступно.";
+    const assetReason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : assetGate;
+    return `<div class="decisionBox"><strong>Брокерский контур</strong><p>Передайте активный контракт в брокерку: получите брокерскую комиссию без полной поставки, +1 влияние, но контракт считается brokered.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<div class="modalActions"><button class="primaryButton" data-action="broker-contract" ${gate ? "disabled" : disabled}>Передать контракт в брокерку</button><button class="secondaryButton" data-buy-cell-asset="${cell.id}" ${assetReason ? "disabled" : disabled} title="${escapeHtml(assetReason)}">Купить брокерский актив за ${assetCostForCell(cell)} млн</button></div></div>`;
+  }
+  if (cell.type === "client") {
+    const contractGate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["client"] }) : "Недоступно.";
+    const assetGate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["client"] }) : "Недоступно.";
+    const owner = room?.assetOwnership?.[cell.id];
+    const price = assetCostForCell(cell);
+    const reason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : assetGate;
+    return `<div class="decisionBox"><strong>Клиентский сегмент</strong><p>Клетка дает доступ к контрактам и может стать долгосрочным активом.</p>
+      <div class="modalActions">${state.config.contracts
+        .slice(0, 3)
+        .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${contractGate ? "disabled" : disabled} title="${escapeHtml(contractGate)}">${escapeHtml(item.title)}</button>`)
+        .join("")}</div>
+      ${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${reason ? "disabled" : disabled}>Купить сегмент за ${price} млн</button></div>`;
+  }
+  if (["asset", "depot", "rail", "road", "supplier", "broker"].includes(cell.type)) {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["asset", "depot", "rail", "road", "client", "supplier", "broker"] }) : "Недоступно.";
     const owner = room?.assetOwnership?.[cell.id];
     const price = assetCostForCell(cell);
     const reason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : gate;
@@ -1040,7 +959,7 @@ function cellActionMarkup(cell, myTurn) {
   }
   if (cell.type === "proleum") {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["proleum"] }) : "Недоступно.";
-    return `<div class="decisionBox"><strong>Экспертное решение</strong><p>Возьмите карту ПРОЛЕУМ в руку. Максимум 3 карты.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-proleum" ${gate ? "disabled" : disabled}>Взять карту</button></div>`;
+    return `<div class="decisionBox"><strong>Экспертное решение</strong><p>Возьмите карту ПРОЛЕУМ в руку. Максимум ${state.config.settings?.proleumHandLimit || 3} карты.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-proleum" ${gate ? "disabled" : disabled}>Взять карту</button></div>`;
   }
   if (["event", "risk", "penalty", "pause"].includes(cell.type)) {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["event", "risk", "penalty", "pause"] }) : "Недоступно.";
@@ -1171,6 +1090,10 @@ function bindCommon() {
   document.querySelectorAll("[data-buy-cell-asset]").forEach((button) => button.addEventListener("click", () => buyCellAsset(button.dataset.buyCellAsset)));
   document.querySelector("[data-action='draw-proleum']")?.addEventListener("click", drawProleumCard);
   document.querySelector("[data-action='draw-event']")?.addEventListener("click", drawEventCard);
+  document.querySelector("[data-action='draw-market']")?.addEventListener("click", drawMarketCardFromCell);
+  document.querySelector("[data-action='broker-contract']")?.addEventListener("click", brokerContract);
+  document.querySelector("[data-action='special-cell']")?.addEventListener("click", applySpecialCell);
+  document.querySelectorAll("[data-buy-hedge]").forEach((button) => button.addEventListener("click", () => buyHedge(button.dataset.buyHedge)));
   document.querySelectorAll("[data-action='resolve-event']").forEach((button) => button.addEventListener("click", () => resolveEventChoice(button.dataset.choice)));
   document.querySelectorAll("[data-action='close-modal']").forEach((item) =>
     item.addEventListener("click", (event) => {
@@ -1213,16 +1136,58 @@ function createPlayer(name, index) {
     name,
     color: palette[index % palette.length],
     position: 0,
-    money: 25,
+    money: state.config?.settings?.startingMoney || 25,
     reputation: 3,
     efficiency: 3,
     influence: 3,
     warehouse: { REG: 0, PRM: 0, DTL: 0 },
     activeContracts: [],
     completedContracts: [],
+    failedContracts: [],
     assets: [],
     proleumCards: [],
+    hedgeTokens: [],
+    brokeredContracts: [],
   };
+}
+
+function marketIncomeAdjustment(room, contract) {
+  const card = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
+  const text = `${card?.effect || ""} ${card?.description || ""}`.toLowerCase();
+  let delta = 0;
+  const category = String(contract.category || "").toLowerCase();
+  const size = String(contract.size || contract.type || "").toLowerCase();
+  if (text.includes("все контракты -1") || text.includes("прямые поставки -1")) delta -= 1;
+  if (text.includes("все контракты +1")) delta += 1;
+  if (text.includes("тендер +2") && contract.type === "тендер") delta += 2;
+  if (text.includes("крупные -1") && size.includes("круп")) delta -= 1;
+  if (text.includes("крупные +1") && size.includes("круп")) delta += 1;
+  if (text.includes("крупные +2") && size.includes("круп")) delta += 2;
+  if (text.includes("малые +1") && size.includes("мал")) delta += 1;
+  [
+    ["агрохолдинг", "агро"],
+    ["азс", "азс"],
+    ["сеть азс", "сеть азс"],
+    ["промышленность", "промышлен"],
+    ["автопарк", "автопарк"],
+    ["региональный", "регион"],
+    ["муниципальные", "муницип"],
+    ["трейдеры", "трейдер"],
+  ].forEach(([needle, cat]) => {
+    const match = text.match(new RegExp(`${needle}[^+-]*([+-])\\s?(\\d+)`));
+    if (match && category.includes(cat)) delta += (match[1] === "+" ? 1 : -1) * Number(match[2]);
+  });
+  return delta;
+}
+
+function applyContractBonus(player, contract, clean = true) {
+  const effect = String(contract.effect || "");
+  const amountMatch = effect.match(/\+(\d+)/);
+  const amount = amountMatch ? Number(amountMatch[1]) : 1;
+  if (effect.includes("Репутац")) player.reputation += amount;
+  else if (effect.includes("Эффектив")) player.efficiency += amount;
+  else if (effect.includes("Влия")) player.influence += amount;
+  else if (clean) player.reputation += contract.type === "малый" ? 1 : 0;
 }
 
 function joinRoom(roomId) {
@@ -1322,7 +1287,8 @@ function takeDeal(kind, id) {
   normalizePlayer(player);
   const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: kind === "tenders" ? ["tender"] : ["contract", "client"] });
   if (gate) return rejectAction(room, gate);
-  if (player.activeContracts.length >= 3) {
+  const activeLimit = state.config?.settings?.activeContractLimit || 2;
+  if (player.activeContracts.length >= activeLimit) {
     room.log.unshift(`${player.name}: нет свободного слота под контракт.`);
     modalState = null;
     commit();
@@ -1330,9 +1296,75 @@ function takeDeal(kind, id) {
   }
   const entity = state.config[kind].find((item) => item.id === id);
   if (!entity) return;
+  const requirement = requirementGate(player, entity.requirement);
+  if (requirement) return rejectAction(room, requirement);
   player.activeContracts.push(cloneDeal(entity));
   markCommercialAction(room);
   room.log.unshift(`${player.name}: взял ${kind === "tenders" ? "тендер" : "контракт"} "${entity.title}".`);
+  modalState = null;
+  commit();
+}
+
+function requirementGate(player, requirement = "") {
+  if (!requirement) return "";
+  const match = String(requirement).match(/(Репутация|Эффективность|Влияние)\s*(\d+)\+/i);
+  if (!match) return "";
+  const key = { "Репутация": "reputation", "Эффективность": "efficiency", "Влияние": "influence" }[match[1]];
+  const needed = Number(match[2]);
+  if (key && player[key] < needed) return `Требование допуска: ${requirement}.`;
+  return "";
+}
+
+function buyHedge(resource) {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: ["hedge"] });
+  if (gate) return rejectAction(room, gate);
+  const limit = state.config?.settings?.hedgeLimit || 2;
+  const cost = state.config?.settings?.hedgeCost || 1;
+  if (player.hedgeTokens.length >= limit) return rejectAction(room, `Лимит hedge-токенов: ${limit}.`);
+  if (player.money < cost) return rejectAction(room, `Hedge стоит ${cost} млн.`);
+  player.money -= cost;
+  player.hedgeTokens.push({ id: uid("hedge"), resource, lockedPrice: resourceMeta[resource].basePrice, volume: 2 });
+  markCommercialAction(room);
+  room.log.unshift(`${player.name}: купил hedge ${resource} за ${cost} млн, фикс цены до 2 жетонов.`);
+  modalState = null;
+  commit();
+}
+
+function drawMarketCardFromCell() {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["marketCard"] });
+  if (gate) return rejectAction(room, gate);
+  room.marketCardIndex = (room.marketCardIndex + 1) % state.config.marketCards.length;
+  room.market = createMarket(room);
+  const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
+  markCellAction(room);
+  room.log.unshift(`${player.name}: открыл карту рынка "${marketCard.title}".`);
+  modalState = null;
+  commit();
+}
+
+function brokerContract() {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: ["broker"] });
+  if (gate) return rejectAction(room, gate);
+  const contract = player.activeContracts[0];
+  if (!contract) return rejectAction(room, "Для брокерки нужен активный контракт.");
+  const fee = contract.brokerFee || Math.max(2, Math.floor((contract.income || 0) / 6));
+  player.money += fee;
+  player.influence += 1;
+  contract.brokered = true;
+  player.brokeredContracts.push(contract);
+  player.completedContracts.push(contract);
+  player.activeContracts = player.activeContracts.filter((item) => item.instanceId !== contract.instanceId);
+  markCommercialAction(room);
+  room.log.unshift(`${player.name}: передал "${contract.title}" в брокерку и получил ${fee} млн комиссии.`);
   modalState = null;
   commit();
 }
@@ -1377,15 +1409,21 @@ function fillContract(contractId) {
   let totalCost = 0;
   let purchased = 0;
   const limit = resourceBuyLimit(room, player);
+  const usedHedges = [];
   const plan = Object.entries(missing).map(([code, amount]) => {
     const fromWarehouse = Math.min(player.warehouse[code] || 0, amount);
     const marketNeed = amount - fromWarehouse;
     const fromMarket = Math.min(marketNeed, room.market.stock[code] || 0, Math.max(0, limit - purchased));
     purchased += fromMarket;
     const urgent = Math.max(0, marketNeed - fromMarket);
-    totalCost += fromMarket * (room.market.prices[code] || resourceMeta[code].basePrice);
+    const hedgeIndex = player.hedgeTokens.findIndex((token) => token.resource === code);
+    const hedgedVolume = hedgeIndex >= 0 ? Math.min(2, fromMarket + urgent) : 0;
+    const marketPrice = room.market.prices[code] || resourceMeta[code].basePrice;
+    totalCost += Math.min(fromMarket, hedgedVolume) * resourceMeta[code].basePrice;
+    totalCost += Math.max(0, fromMarket - hedgedVolume) * marketPrice;
     totalCost += urgent * (resourceMeta[code].basePrice + 2);
-    return { code, amount: fromWarehouse + fromMarket + urgent, fromWarehouse, fromMarket, urgent };
+    if (hedgedVolume) usedHedges.push(hedgeIndex);
+    return { code, amount: fromWarehouse + fromMarket + urgent, fromWarehouse, fromMarket, urgent, hedgedVolume };
   });
   if (player.money < totalCost) {
     room.log.unshift(`${player.name}: не хватает капитала на срочную закупку для "${contract.title}".`);
@@ -1397,10 +1435,16 @@ function fillContract(contractId) {
     plan.forEach(({ code, fromMarket }) => {
       room.market.stock[code] = Math.max(0, (room.market.stock[code] || 0) - fromMarket);
     });
+    [...new Set(usedHedges)].sort((a, b) => b - a).forEach((index) => player.hedgeTokens.splice(index, 1));
     player.money -= totalCost;
     markCommercialAction(room);
     const urgentCount = plan.reduce((sum, item) => sum + item.urgent, 0);
-    room.log.unshift(`${player.name}: обеспечил ресурс по сделке "${contract.title}" за ${totalCost} млн${urgentCount ? `, срочно ${urgentCount} жет.` : ""}.`);
+    const hedgeCount = plan.reduce((sum, item) => sum + item.hedgedVolume, 0);
+    room.log.unshift(`${player.name}: обеспечил ресурс по сделке "${contract.title}" за ${totalCost} млн${urgentCount ? `, срочно ${urgentCount} жет.` : ""}${hedgeCount ? `, hedge применен на ${hedgeCount} жет.` : ""}.`);
+  }
+  if (["claim", "block", "meeting"].includes(cell.type)) {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["claim", "block", "meeting"] }) : "Недоступно.";
+    return `<div class="decisionBox"><strong>${escapeHtml(cell.title)}</strong><p>${escapeHtml(cell.description)}</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="special-cell" ${gate ? "disabled" : disabled}>Применить эффект</button></div>`;
   }
   modalState = null;
   commit();
@@ -1424,16 +1468,18 @@ function closeContract(contractId, routeKey) {
   room.market.usedLogistics.depot += route.depot;
   player.money -= route.cost;
   const risk = resolveRisk(room, player, contract, route);
-  player.money += contract.income;
-  player.reputation += contract.type === "малый" ? 1 : 0;
-  player.influence += contract.type === "тендер" ? 2 : contract.type === "средний" ? 1 : 0;
-  player.efficiency += contract.type === "крупный" ? 1 : 0;
+  const marketDelta = marketIncomeAdjustment(room, contract);
+  const finalIncome = Math.max(0, contract.income + marketDelta);
+  player.money += finalIncome;
+  applyContractBonus(player, contract, !risk.triggered);
   contract.closedRoute = route.title;
   contract.closedDay = room.day;
+  contract.finalIncome = finalIncome;
+  contract.marketDelta = marketDelta;
   player.completedContracts.push(contract);
   player.activeContracts.splice(index, 1);
   markCommercialAction(room);
-  room.log.unshift(`${player.name}: закрыл "${contract.title}" через ${route.title}. Доход ${contract.income} млн, логистика ${route.cost} млн${risk.triggered ? `, риск сработал (${risk.eventCard.title}, -${risk.penalty} млн)` : risk.dice ? `, риск пройден D6=${risk.dice}` : ""}.`);
+  room.log.unshift(`${player.name}: закрыл "${contract.title}" через ${route.title}. Доход ${finalIncome} млн${marketDelta ? ` (рынок ${marketDelta > 0 ? "+" : ""}${marketDelta})` : ""}, логистика ${route.cost} млн${risk.triggered ? `, риск сработал (${risk.eventCard.title}, -${risk.penalty} млн)` : risk.dice ? `, риск пройден D6=${risk.dice}` : ""}.`);
   modalState = null;
   commit();
 }
@@ -1444,7 +1490,7 @@ function buyCellAsset(cellId) {
   if (!room || !player) return;
   const cell = state.config.boardCells.find((item) => item.id === cellId);
   if (!cell) return;
-  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId, cells: ["asset", "depot", "rail", "road", "client", "supplier"] });
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId, cells: ["asset", "depot", "rail", "road", "client", "supplier", "broker"] });
   if (gate) return rejectAction(room, gate);
   if (room.assetOwnership[cellId]) return rejectAction(room, `Актив уже принадлежит ${room.assetOwnership[cellId].ownerName}.`);
   if (player.assetPurchasedLap === player.lap) return rejectAction(room, "За один круг можно купить только один новый актив.");
@@ -1470,7 +1516,8 @@ function drawProleumCard() {
   if (!room || !player) return;
   const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["proleum"] });
   if (gate) return rejectAction(room, gate);
-  if (player.proleumCards.length >= 3) {
+  const handLimit = state.config.settings?.proleumHandLimit || 3;
+  if (player.proleumCards.length >= handLimit) {
     room.log.unshift(`${player.name}: рука ПРОЛЕУМ уже заполнена.`);
   } else {
     const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
@@ -1499,20 +1546,68 @@ function resolveEventChoice(choice) {
   const room = activeRoom();
   const player = requireTurnPlayer();
   if (!room || !player || modalState?.type !== "eventChoice") return;
-  if (choice === "pay") {
-    const cost = Math.min(player.money, 2);
-    player.money -= cost;
-    room.log.unshift(`${player.name}: решил событие "${modalState.title}" деньгами (-${cost} млн).`);
-  }
-  if (choice === "rep") {
+  const eventCard = state.config.events.find((item) => item.id === modalState.eventId) || modalState;
+  const choiceText = eventCard.choices?.[Number(choice)] || String(choice);
+  const moneyMatch = choiceText.match(/(\d+)\s*млн/);
+  const cost = moneyMatch ? Number(moneyMatch[1]) : 0;
+  if (choiceText.toLowerCase().includes("хедж") && player.hedgeTokens.length) {
+    player.hedgeTokens.shift();
+    room.log.unshift(`${player.name}: решил событие "${eventCard.title}" через hedge.`);
+  } else if (choiceText.includes("+1 Репута")) {
+    player.reputation += 1;
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (+1 Репутация).`);
+  } else if (choiceText.includes("+1 млн") || choiceText.includes("Скидка 1 млн")) {
+    player.money += 1;
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (+1 млн).`);
+  } else if (cost) {
+    player.money = Math.max(0, player.money - cost);
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (-${cost} млн).`);
+  } else if (choiceText.includes("Репутац") || choiceText.includes("репутац")) {
     player.reputation = Math.max(0, player.reputation - 1);
-    room.log.unshift(`${player.name}: решил событие "${modalState.title}" через репутационные потери (-1).`);
-  }
-  if (choice === "delay") {
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (-1 Репутация).`);
+  } else if (choiceText.includes("Влия")) {
+    player.influence = Math.max(0, player.influence - 1);
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (-1 Влияние).`);
+  } else if (choiceText.includes("Эффектив")) {
+    player.efficiency += 1;
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (+1 Эффективность).`);
+  } else if (choiceText.includes("Срок") || choiceText.includes("срок") || choiceText.includes("Отложить")) {
     const active = player.activeContracts[0];
     if (active) active.duration = Math.max(0, active.duration - 1);
-    room.log.unshift(`${player.name}: принял задержку по событию "${modalState.title}".`);
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}" (срок -1).`);
+  } else {
+    room.log.unshift(`${player.name}: выбрал "${choiceText}" по событию "${eventCard.title}".`);
   }
+  modalState = null;
+  commit();
+}
+
+function applySpecialCell() {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const cell = currentCell(room, player);
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["claim", "block", "meeting"] });
+  if (gate) return rejectAction(room, gate);
+  if (cell.type === "meeting") {
+    if (player.proleumCards.length < (state.config.settings?.proleumHandLimit || 3)) {
+      const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
+      player.proleumCards.push(clone(cardItem));
+      room.log.unshift(`${player.name}: планерка дала карту ПРОЛЕУМ "${cardItem.title}".`);
+    } else {
+      player.influence += 1;
+      room.log.unshift(`${player.name}: планерка усилила влияние (+1).`);
+    }
+  } else if (cell.type === "claim") {
+    const cost = Math.min(player.money, 2);
+    player.money -= cost;
+    room.log.unshift(`${player.name}: закрыл претензионный блок за ${cost} млн.`);
+  } else if (cell.type === "block") {
+    if (player.activeContracts[0]) player.activeContracts[0].duration = Math.max(0, player.activeContracts[0].duration - 1);
+    else player.money = Math.max(0, player.money - 1);
+    room.log.unshift(`${player.name}: обработал блокировку поставки.`);
+  }
+  markCellAction(room);
   modalState = null;
   commit();
 }
