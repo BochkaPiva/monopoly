@@ -456,10 +456,11 @@ textarea:focus {
 
 .gameLayout {
   display: grid;
-  grid-template-columns: minmax(720px, 1fr) minmax(330px, 0.42fr);
+  grid-template-columns: minmax(760px, 1fr) minmax(320px, 0.36fr);
   gap: 18px;
   align-items: start;
-  padding-bottom: 132px;
+  padding-top: 84px;
+  padding-bottom: 238px;
 }
 
 .boardPanel {
@@ -473,9 +474,9 @@ textarea:focus {
   grid-template-columns: repeat(11, minmax(38px, 1fr));
   grid-template-rows: repeat(11, minmax(38px, 1fr));
   aspect-ratio: 1;
-  width: min(100%, calc(100vh - 135px));
-  min-width: 680px;
-  max-height: calc(100vh - 150px);
+  width: min(100%, calc(100vh - 92px));
+  min-width: 760px;
+  max-height: calc(100vh - 110px);
   margin-inline: auto;
   padding: 10px;
   background: #ffffff;
@@ -489,8 +490,8 @@ textarea:focus {
   min-width: 0;
   min-height: 0;
   align-content: space-between;
-  gap: 3px;
-  padding: 5px;
+  gap: 4px;
+  padding: 6px;
   color: #101010;
   background: #fbfaf6;
   border: 1px solid #ddd7c8;
@@ -589,9 +590,9 @@ textarea:focus {
 .boardCell strong {
   overflow: hidden;
   display: -webkit-box;
-  font-size: clamp(8px, 0.72vw, 11px);
-  line-height: 1.08;
-  -webkit-line-clamp: 3;
+  font-size: clamp(9px, 0.74vw, 12px);
+  line-height: 1.04;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   hyphens: none;
   overflow-wrap: normal;
@@ -639,7 +640,7 @@ textarea:focus {
 
 .boardCenter {
   position: absolute;
-  inset: 16.5%;
+  inset: 15%;
   display: grid;
   align-content: stretch;
   gap: 14px;
@@ -647,8 +648,13 @@ textarea:focus {
   text-align: center;
   color: #ffffff;
   background:
+    radial-gradient(circle at 18% 20%, rgba(0, 255, 78, 0.18), transparent 17%),
+    radial-gradient(circle at 86% 76%, rgba(255, 204, 0, 0.17), transparent 18%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(135deg, rgba(255, 204, 0, 0.16), transparent 42%),
     #070707;
+  background-size: auto, auto, 26px 26px, 26px 26px, auto;
   border: 1px solid #242424;
   border-radius: 8px;
 }
@@ -717,14 +723,52 @@ textarea:focus {
 }
 
 .resourceGrid.compact .resourceTile {
-  min-height: 72px;
-  padding: 8px;
+  min-height: 98px;
+  padding: 10px;
   color: #ffffff;
-  background: #141414;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent),
+    #0d0d0d;
 }
 
-.resourceGrid.compact .resourceTile span {
+.resourceGrid.compact .resourceTile span,
+.resourceGrid.compact .resourceTile small {
   color: #ffffff;
+}
+
+.resourceGrid.compact .resourceTile strong {
+  color: #8d8d8d;
+  font-size: clamp(28px, 2.9vw, 52px);
+  line-height: 0.9;
+}
+
+.tickerPrice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.tickerPrice b {
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.priceUp .tickerPrice,
+.priceUp .tickerPrice b {
+  color: #ff4d4d !important;
+}
+
+.priceDown .tickerPrice,
+.priceDown .tickerPrice b {
+  color: #00e05a !important;
+}
+
+.priceFlat .tickerPrice b {
+  color: #ffcc00;
 }
 
 .resourceGrid.compact .resourceTile em {
@@ -775,15 +819,7 @@ textarea:focus {
   margin-bottom: 0;
 }
 
-.commandBar {
-  padding: 14px;
-  background:
-    linear-gradient(135deg, rgba(255, 204, 0, 0.11), transparent 46%),
-    #111111;
-  border: 1px solid #2c281c;
-  border-radius: 10px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
-}
+.commandBar { display: none; }
 
 .commandBar p {
   max-width: 420px;
@@ -801,6 +837,59 @@ textarea:focus {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+.turnOverlay {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  z-index: 17;
+  overflow: hidden;
+  width: min(1180px, calc(100vw - 40px));
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 18% 50%, rgba(0, 255, 78, 0.15), transparent 18%),
+    linear-gradient(135deg, rgba(255, 204, 0, 0.12), transparent 46%),
+    #080808;
+  border: 1px solid #332b15;
+  border-radius: 10px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+  transform: translateX(-50%);
+  animation: turnSlide 0.26s ease-out;
+}
+
+.turnTimer {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.turnTimer i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #00e05a, #ffcc00, #ff4d4d);
+  transform-origin: left;
+  animation: turnCountdown 60s linear forwards;
+}
+
+.turnOverlayMain {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.turnIdentity h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 22px;
+}
+
+.turnIdentity p {
+  margin: 2px 0 0;
+  color: #d8d0c0;
+  font-size: 13px;
 }
 
 .turnChecklist span {
@@ -1011,6 +1100,22 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.routeLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.routeLine span {
+  padding: 4px 7px;
+  color: #f8f6ef;
+  background: #181818;
+  border: 1px solid #4a4127;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .activeDealsPanel {
@@ -1372,16 +1477,7 @@ textarea:focus {
 }
 
 .turnPrompt {
-  position: fixed;
-  inset: 0;
-  z-index: 18;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background:
-    radial-gradient(circle at 50% 45%, rgba(255, 204, 0, 0.18), transparent 28%),
-    rgba(0, 0, 0, 0.54);
-  backdrop-filter: blur(5px);
+  display: none;
 }
 
 .turnPromptCard {
@@ -1449,12 +1545,12 @@ textarea:focus {
 
 .playerDock {
   position: fixed;
-  right: 24px;
+  right: 22px;
   bottom: 0;
   z-index: 12;
-  width: min(920px, calc(100vw - 340px));
-  transform: translateY(calc(100% - 54px));
-  transition: transform 0.28s ease;
+  width: min(1320px, calc(100vw - 104px));
+  transform: translateY(calc(100% - 50px));
+  transition: transform 0.32s cubic-bezier(.2, .8, .2, 1);
 }
 
 .playerDock:hover,
@@ -1465,22 +1561,27 @@ textarea:focus {
 .dockHandle {
   width: max-content;
   margin-left: auto;
-  padding: 11px 18px;
+  padding: 12px 22px;
   color: #050505;
   background: #ffcc00;
-  border-radius: 10px 10px 0 0;
+  border-radius: 8px 8px 0 0;
   font-weight: 900;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .tabletStack {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 12px;
-  max-height: 58vh;
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  gap: 14px;
+  max-height: 70vh;
   overflow: auto;
-  padding: 14px;
-  background: rgba(8, 8, 8, 0.94);
+  padding: 16px;
+  background:
+    radial-gradient(circle at 8% 15%, rgba(0, 255, 78, 0.12), transparent 18%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    rgba(8, 8, 8, 0.97);
+  background-size: auto, 28px 28px, 28px 28px, auto;
   border: 1px solid #2d2a20;
   border-radius: 10px 0 0 0;
   box-shadow: 0 -20px 70px rgba(0, 0, 0, 0.34);
@@ -1488,10 +1589,13 @@ textarea:focus {
 
 .playerTablet {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   color: #f8f6ef;
-  background: linear-gradient(180deg, #171717, #080808);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 204, 0, 0.16), transparent 22%),
+    linear-gradient(180deg, #171717, #080808);
   border: 1px solid #333027;
   border-radius: 8px;
 }
@@ -1501,37 +1605,38 @@ textarea:focus {
   box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.42);
 }
 
-.playerTablet header,
-.playerTablet header div,
+.tabletHeader,
+.tabletHeader div,
 .tabletStats {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.playerTablet header {
+.tabletHeader {
+  grid-column: 1 / -1;
   justify-content: space-between;
 }
 
-.playerTablet header i {
+.tabletHeader i {
   width: 12px;
   height: 12px;
   border-radius: 999px;
 }
 
-.playerTablet header span {
+.tabletHeader span {
   color: #ffcc00;
   font-size: 12px;
   font-weight: 900;
 }
 
 .tabletStats {
+  grid-column: 1 / -1;
   flex-wrap: wrap;
 }
 
 .tabletStats span,
-.tabletChips span,
-.tabletList span {
+.tabletHistory span {
   padding: 6px 8px;
   color: #eee6d3;
   background: #25231e;
@@ -1539,18 +1644,211 @@ textarea:focus {
   font-size: 12px;
 }
 
-.playerTablet summary {
-  cursor: pointer;
-  color: #ffcc00;
-  font-weight: 900;
+.tabletZone {
+  display: grid;
+  gap: 8px;
 }
 
-.tabletChips,
-.tabletList {
+.tabletZone.wide {
+  grid-column: 1 / -1;
+}
+
+.tabletZone h4 {
+  margin: 0;
+  color: #ffcc00;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.slotGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.dealSlots {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.warehouseSlots {
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+
+.proleumSlots,
+.assetSlots {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.cardSlot {
+  min-height: 86px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  color: #81786a;
+  background:
+    linear-gradient(135deg, rgba(255, 204, 0, 0.06), transparent 42%),
+    #101010;
+  border: 1px dashed #403a2c;
+  border-radius: 7px;
+  text-align: center;
+}
+
+.cardSlot.filled {
+  place-items: stretch;
+  color: #f8f6ef;
+  border-style: solid;
+}
+
+.miniDealCard {
+  display: grid;
+  gap: 7px;
+  text-align: left;
+}
+
+.miniDealCard header {
+  display: grid;
+  gap: 2px;
+}
+
+.miniDealCard header span {
+  color: #ffcc00;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.miniDealCard header strong {
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.miniDealMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.miniDealMeta span,
+.cardSlot small {
+  color: #bfb6a3;
+  font-size: 11px;
+}
+
+.warehouseSlot {
+  min-height: 58px;
+}
+
+.warehouseSlot strong {
+  font-size: 18px;
+}
+
+.proleumSlot {
+  border-color: #ffcc00;
+}
+
+.assetSlot {
+  border-color: #5a523e;
+}
+
+.tabletHistory {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 2px;
+}
+
+.playerRail {
+  position: fixed;
+  left: 0;
+  top: 168px;
+  z-index: 11;
+  display: flex;
+  align-items: flex-start;
+  transform: translateX(calc(-100% + 48px));
+  transition: transform 0.28s ease;
+}
+
+.playerRail:hover,
+.playerRail:focus-within {
+  transform: translateX(0);
+}
+
+.railHandle {
+  order: 2;
+  writing-mode: vertical-rl;
+  padding: 14px 10px;
+  color: #050505;
+  background: #ffcc00;
+  border-radius: 0 8px 8px 0;
+  font-weight: 950;
+}
+
+.railStack {
+  width: 310px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  color: #ffffff;
+  background:
+    linear-gradient(180deg, rgba(255, 204, 0, 0.1), transparent 36%),
+    #080808;
+  border: 1px solid #292416;
+  border-left: 0;
+  border-radius: 0 0 8px 0;
+  box-shadow: 18px 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+.railPlayer {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: #131313;
+  border: 1px solid #302a1b;
+  border-radius: 7px;
+}
+
+.railPlayer.current {
+  border-color: #ffcc00;
+}
+
+.railPlayer header,
+.railPlayer header div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.railPlayer header {
+  justify-content: space-between;
+}
+
+.railPlayer i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.railPlayer header span {
+  color: #ffcc00;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.railPlayer > div {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+.railPlayer > div span {
+  padding: 5px;
+  color: #e7dec8;
+  background: #232018;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
 }
 
 @keyframes diceShake {
@@ -1558,6 +1856,22 @@ textarea:focus {
   35% { transform: translateY(-5px) rotate(-8deg); }
   70% { transform: translateY(3px) rotate(8deg); }
   100% { transform: translateY(0) rotate(0deg); }
+}
+
+@keyframes turnSlide {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -16px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes turnCountdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
 }
 
 @keyframes modalIn {
