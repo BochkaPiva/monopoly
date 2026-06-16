@@ -3,3 +3,7 @@ proleum-screenshot.png
 node_modules/
 dist/
 .DS_Store
+.env
+.env.*
+!.env.example
+.edge-*/

@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "node --check src/app.js && node --check server.js"
+    "build": "node --check src/app.js && node --check server.js && node --check api/state.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.2"
+  },
   "devDependencies": {}
 }

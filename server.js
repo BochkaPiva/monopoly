@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 const port = Number(process.env.PORT || 5173);
@@ -12,6 +12,26 @@ const mime = {
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
 };
+
+function loadEnvFile(fileName) {
+  const filePath = join(root, fileName);
+  if (!existsSync(filePath)) return;
+  const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
+    process.env[key] ||= value;
+  }
+}
+
+loadEnvFile(".env.local");
+loadEnvFile(".env");
+
+const { default: handleStateRequest } = await import("./api/state.js");
 
 async function readBody(request) {
   const chunks = [];
@@ -59,12 +79,20 @@ const server = createServer(async (request, response) => {
   }
 
   if (url.pathname === "/api/state" && request.method === "GET") {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      await handleStateRequest(request, response);
+      return;
+    }
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-    response.end(JSON.stringify((await getState()) || null));
+    response.end(JSON.stringify((await getState()) || { rooms: [] }));
     return;
   }
 
   if (url.pathname === "/api/state" && request.method === "PUT") {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      await handleStateRequest(request, response);
+      return;
+    }
     const state = JSON.parse(await readBody(request));
     await saveState(state);
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
