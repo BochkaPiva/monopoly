@@ -101,6 +101,10 @@ async function syncFromServer() {
       await pushToServer();
       return;
     }
+    if (!remote.rooms?.length && state.rooms?.length) {
+      await pushToServer();
+      return;
+    }
     const serialized = JSON.stringify(remote);
     if (serialized && serialized !== lastSyncedState && serialized !== JSON.stringify(state)) {
       normalizeState(remote);
@@ -698,7 +702,7 @@ function marketTerminalMarkup(room, openContracts, openTenders, contractReason, 
       .join("")}</div></section>
     <section class="terminalDeck tenderDeck"><h3>Тендер дня</h3>${state.config.tenders
       .slice(0, openTenders)
-      .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason, source: "market" }))
+      .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason, source: "tender" }))
       .join("")}</section>
   </aside>`;
 }
@@ -736,10 +740,10 @@ function playerRailMarkup(room) {
     <div class="railStack">
       ${room.players
         .map(
-          (player) => `<article class="railPlayer ${currentPlayer(room)?.id === player.id ? "current" : ""}">
+          (player) => `<button class="railPlayer ${currentPlayer(room)?.id === player.id ? "current" : ""}" data-open-opponent="${player.id}">
             <header><i style="background:${player.color}"></i><strong>${escapeHtml(player.name)}</strong><span>${currentPlayer(room)?.id === player.id ? "ходит" : "ожидает"}</span></header>
             <div><span>${player.money} млн</span><span>Р${player.reputation}</span><span>Э${player.efficiency}</span><span>В${player.influence}</span><span>${scorePlayer(player)} VP</span></div>
-          </article>`,
+          </button>`,
         )
         .join("")}
     </div>
@@ -840,9 +844,8 @@ function findCardByRef(ref) {
   const room = activeRoom();
   const mine = room ? userPlayer(room) : null;
   const [zone, id] = String(ref || "").split(":");
-  if (zone === "market" || zone === "entity") {
-    return state.config.contracts.find((item) => item.id === id) || state.config.tenders.find((item) => item.id === id);
-  }
+  if (zone === "market" || zone === "entity") return state.config.contracts.find((item) => item.id === id) || state.config.tenders.find((item) => item.id === id);
+  if (zone === "tender") return state.config.tenders.find((item) => item.id === id);
   if (zone === "marketCard") return state.config.marketCards.find((item) => item.id === id);
   if (zone === "activeContract") return mine?.activeContracts.find((item) => item.instanceId === id);
   if (zone === "proleum") return mine?.proleumCards.find((item) => item.id === id);
@@ -894,7 +897,7 @@ function expandedCardActions(room, mine, card, ref) {
     const reason = actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["contract", "client"] });
     return actionButton("Взять контракт", "", !reason, reason, `data-take-contract="${card.id}"`);
   }
-  if (zone === "entity" && card.type === "тендер") {
+  if (zone === "tender" || (zone === "entity" && card.type === "тендер")) {
     const reason = actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["tender"] });
     return actionButton("Заявиться", "", !reason, reason, `data-take-tender="${card.id}"`);
   }
@@ -926,12 +929,37 @@ function modalMarkup() {
         <h2>Выберите коммерческое действие</h2>
         <p>За ход доступно одно коммерческое действие. Недоступные варианты показывают причину блокировки.</p>
         <div class="decisionGrid">
-          ${commercialActionOption(room, mine, "Закупить ресурс", "supplier, market")}
-          ${commercialActionOption(room, mine, "Взять контракт", "contract, client")}
-          ${commercialActionOption(room, mine, "Заявиться на тендер", "tender")}
-          ${commercialActionOption(room, mine, "Hedge MOEX", "hedge")}
-          ${commercialActionOption(room, mine, "Брокерка", "broker")}
+          ${commercialActionOption(room, mine, { label: "Закупить ресурс", cells: ["supplier", "market"], details: "REG / PRM / DTL в пределах остатка рынка", action: "resources" })}
+          ${commercialActionOption(room, mine, { label: "Взять контракт", cells: ["contract", "client"], details: "Открытая сделка попадет в свободный слот", action: "contracts" })}
+          ${commercialActionOption(room, mine, { label: "Заявиться на тендер", cells: ["tender"], details: "Тендер занимает слот активной сделки", action: "tender" })}
+          ${commercialActionOption(room, mine, { label: "Hedge MOEX", cells: ["hedge"], details: "Фиксация цены ресурса до 2 жетонов", action: "hedge" })}
+          ${commercialActionOption(room, mine, { label: "Брокерка", cells: ["broker"], details: "Передать активный контракт в брокерский контур", action: "broker" })}
         </div>
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "opponent") {
+    const opponent = room?.players.find((player) => player.id === modalState.playerId);
+    if (!opponent) return "";
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet cardSheet opponentSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="cardType">Открытая информация</span>
+        <h2>${escapeHtml(opponent.name)}</h2>
+        <div class="tabletStats opponentStats">
+          <span>Капитал <strong>${opponent.money} млн</strong></span>
+          <span>Репутация <strong>${opponent.reputation}</strong></span>
+          <span>Эффективность <strong>${opponent.efficiency}</strong></span>
+          <span>Влияние <strong>${opponent.influence}</strong></span>
+          <span>Очки <strong>${scorePlayer(opponent)}</strong></span>
+        </div>
+        <div class="cardFacts">
+          <span>Активные сделки <strong>${opponent.activeContracts.length}</strong></span>
+          <span>Карты ПРОЛЕУМ <strong>${opponent.proleumCards.length}</strong></span>
+          <span>Активы <strong>${opponent.assets.length}</strong></span>
+          <span>Склад <strong>${warehouseUsed(opponent)}/${warehouseCapacity(opponent)}</strong></span>
+        </div>
+        <div class="hintBox">Закрытые карты соперника не раскрываются: видны только количество и открытые метрики компании.</div>
       </section>
     </div>`;
   }
@@ -1021,7 +1049,7 @@ function modalMarkup() {
     const eventCard = state.config.events.find((item) => item.id === modalState.eventId) || modalState;
     const choices = eventCard.choices?.length ? eventCard.choices : ["Заплатить и сохранить темп", "Потерять репутацию", "Принять задержку"];
     return `<div class="modalBackdrop" data-action="close-modal">
-      <section class="modalSheet" data-modal-body>
+      <section class="modalSheet cellSheet theme-${cellTheme(cell.type)}" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
         <span class="kicker">Операционное событие</span>
         <h2>${escapeHtml(eventCard.title)}</h2>
@@ -1243,6 +1271,12 @@ function bindCommon() {
       render();
     }),
   );
+  document.querySelectorAll("[data-open-opponent]").forEach((button) =>
+    button.addEventListener("click", () => {
+      modalState = { type: "opponent", playerId: button.dataset.openOpponent };
+      render();
+    }),
+  );
   document.querySelectorAll("[data-buy-resource]").forEach((button) =>
     button.addEventListener("click", () => {
       modalState = { type: "resource", code: button.dataset.buyResource };
@@ -1332,8 +1366,39 @@ function createPlayer(name, index) {
   };
 }
 
-function commercialActionOption(room, player, label, cellsText) {
-  return `<button class="routeOption" disabled><strong>${escapeHtml(label)}</strong><span>Доступно на клетках: ${escapeHtml(cellsText)}</span><small>Откройте действие текущей клетки или кликните подходящую карточку.</small></button>`;
+function commercialActionOption(room, player, option) {
+  const currentCell = state.config.boardCells[player.position];
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: option.cells });
+  const onRightCell = option.cells.includes(currentCell?.type);
+  const reason = gate || (!onRightCell ? `Нужно стоять на клетке: ${option.cells.join(", ")}.` : "");
+  const enabled = !reason;
+  if (option.action === "resources" && enabled) {
+    return `<div class="routeOption commercialOption"><strong>${escapeHtml(option.label)}</strong><span>${escapeHtml(option.details)}</span><div class="miniActions">
+      <button class="secondaryButton" data-buy-resource="REG">REG</button>
+      <button class="secondaryButton" data-buy-resource="PRM">PRM</button>
+      <button class="secondaryButton" data-buy-resource="DTL">DTL</button>
+    </div></div>`;
+  }
+  if (option.action === "hedge" && enabled) {
+    const code = currentCell.title.includes("PRM") ? "PRM" : currentCell.title.includes("DTL") ? "DTL" : "REG";
+    return `<button class="routeOption commercialOption" data-buy-hedge="${code}"><strong>${escapeHtml(option.label)} ${code}</strong><span>${escapeHtml(option.details)}</span><small>Купить hedge за ${state.config.settings?.hedgeCost || 1} млн</small></button>`;
+  }
+  if (option.action === "broker" && enabled) {
+    return `<button class="routeOption commercialOption" data-action="broker-contract"><strong>${escapeHtml(option.label)}</strong><span>${escapeHtml(option.details)}</span><small>${player.activeContracts.length ? "Передать первый активный контракт" : "Нет активных контрактов"}</small></button>`;
+  }
+  return `<button class="routeOption commercialOption" ${enabled ? `data-open-cell="${currentCell.id}"` : "disabled"}><strong>${escapeHtml(option.label)}</strong><span>${escapeHtml(option.details)}</span><small>${escapeHtml(reason || "Открыть действие текущей клетки")}</small></button>`;
+}
+
+function cellTheme(type) {
+  if (["supplier"].includes(type)) return "supplier";
+  if (["market", "marketCard", "hedge"].includes(type)) return "market";
+  if (["client", "contract", "tender"].includes(type)) return "contract";
+  if (["rail", "road"].includes(type)) return "rail";
+  if (["depot"].includes(type)) return "depot";
+  if (["broker"].includes(type)) return "broker";
+  if (["event", "risk", "block", "claim", "penalty"].includes(type)) return "event";
+  if (["proleum", "meeting"].includes(type)) return "proleum";
+  return "default";
 }
 
 function marketIncomeAdjustment(room, contract) {

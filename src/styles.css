@@ -917,6 +917,12 @@ textarea:focus {
   border-color: #ffcc00;
 }
 
+.turnChecklist .active {
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.22), 0 0 18px rgba(255, 204, 0, 0.2);
+}
+
 .diceConsole {
   display: flex;
   align-items: center;
@@ -1490,6 +1496,16 @@ textarea:focus {
   opacity: 0.45;
 }
 
+.commercialOption {
+  min-height: 118px;
+}
+
+.miniActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .diceOverlay {
   position: fixed;
   inset: 0;
@@ -1826,14 +1842,22 @@ textarea:focus {
 .railPlayer {
   display: grid;
   gap: 8px;
+  width: 100%;
   padding: 10px;
+  color: #ffffff;
   background: #131313;
   border: 1px solid #302a1b;
   border-radius: 7px;
+  text-align: left;
 }
 
 .railPlayer.current {
   border-color: #ffcc00;
+}
+
+.railPlayer:hover {
+  border-color: #ffcc00;
+  transform: translateX(2px);
 }
 
 .railPlayer header,
@@ -2243,6 +2267,46 @@ textarea:focus {
 .cardFacts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .cardFacts span { padding: 8px 10px; color: #d8d0c0; background: #1a1812; border: 1px solid #332b15; border-radius: 8px; font-size: 12px; }
 .cardFacts strong { color: var(--accent); }
+
+.cellSheet {
+  --theme: var(--accent);
+  color: #f8f6ef;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--theme) 18%, transparent), transparent 24%),
+    #11110f;
+  border-color: color-mix(in srgb, var(--theme) 58%, #1b1b1b);
+}
+
+.cellSheet h2,
+.cellSheet .kicker {
+  color: #ffffff;
+}
+
+.cellSheet p {
+  color: #d8d0c0;
+}
+
+.cellSheet .cellStatus,
+.cellSheet .decisionBox {
+  color: #f8f6ef;
+  background: #171510;
+  border-color: color-mix(in srgb, var(--theme) 42%, #27231a);
+}
+
+.theme-supplier { --theme: var(--success); }
+.theme-market { --theme: var(--info); }
+.theme-contract { --theme: #d7a72d; }
+.theme-rail { --theme: #9aa1aa; }
+.theme-depot { --theme: #4d4a43; }
+.theme-broker { --theme: #9b5cff; }
+.theme-event { --theme: var(--danger); }
+.theme-proleum { --theme: var(--accent); }
+
+.opponentSheet .hintBox {
+  color: #f8f6ef;
+  background: #171510;
+  border-color: #332b15;
+}
 
 @keyframes drawerIn { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes cardExpand { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
