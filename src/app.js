@@ -378,7 +378,7 @@ function render() {
 
   const room = activeRoom();
   root.innerHTML = `
-    <div class="app">
+    <div class="app ${view === "game" ? "gameApp" : ""}">
       <aside class="sidebar">
         <div class="brand">
           ${proleumLogo}
@@ -395,11 +395,15 @@ function render() {
       </aside>
       <main class="workspace">
         <header class="topbar">
-          <div>
+          <div class="topIdentity">
+            ${view === "game" ? proleumLogo : ""}
+            <div>
             <span class="kicker">Тестовый мультиплеерный прототип</span>
             <h1>${view === "game" && room ? escapeHtml(room.name) : "ПРОЛЕУМ: торговая партия для VIP-клиентов"}</h1>
+            </div>
           </div>
           <div class="statusStrip">
+            ${view === "game" ? `<button class="miniNav" data-view="rooms">Комнаты</button><button class="miniNav" data-view="rules">Правила</button>` : ""}
             ${room ? `<span>Комната: ${room.id}</span>` : ""}
             <span>${user.role === "admin" ? "Редактирование включено" : "Режим игрока"}</span>
           </div>
@@ -408,6 +412,7 @@ function render() {
         ${view === "game" && room ? gameMarkup(room) : ""}
         ${view === "rules" ? rulesMarkup() : ""}
         ${view === "editor" && user.role === "admin" ? editorMarkup() : ""}
+        ${turnPromptMarkup()}
         ${modalMarkup()}
         ${diceOverlayMarkup()}
       </main>
@@ -483,13 +488,10 @@ function roomCardMarkup(room) {
 function gameMarkup(room) {
   normalizeState(state);
   const playerCount = Math.max(2, Math.min(6, room.players.length));
-  const volumes = resourceVolumesByPlayers[playerCount];
-  const logistics = logisticsByPlayers[playerCount];
   const actingPlayer = currentPlayer(room);
   const mine = userPlayer(room);
   const myTurn = canUserAct(room);
   const rolled = Boolean(room.turnState?.rolled);
-  const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   const selected = state.config.boardCells.find((cell) => cell.id === room.selectedEntityId) || state.config.boardCells[0];
   return `
     <section class="gameLayout">
@@ -507,19 +509,6 @@ function gameMarkup(room) {
           </div>
           <button class="primaryButton" data-action="end-turn" ${myTurn ? "" : "disabled"}>Завершить ход</button>
           <button class="secondaryButton" data-action="next-day" ${user.role === "admin" ? "" : "disabled"}>День +1</button>
-        </div>
-        <div class="marketTablet">
-          <section><h3>Ресурс</h3><div class="resourceGrid">
-            ${Object.entries(resourceMeta)
-              .map(
-                ([code, meta]) => `<button class="resourceTile" style="border-color:${meta.color}" data-buy-resource="${code}" ${myTurn ? "" : "disabled"}>
-                  <strong>${code}</strong><span>${meta.basePrice} млн</span><small>объем ${volumes[code]}</small><em>Купить</em>
-                </button>`,
-              )
-              .join("")}
-          </div></section>
-          <section><h3>Логистика дня</h3><div class="logisticsGrid"><div>ЖД-мощность <strong>${logistics.rail}</strong></div><div>Нефтебаза <strong>${logistics.depot}</strong></div></div></section>
-          <section class="wide"><h3>Карта рынка</h3>${entityCardMarkup(marketCard, true)}</section>
         </div>
         <div class="dealColumns">
           <section class="deckColumn"><h3>Открытые контракты</h3>${state.config.contracts
@@ -548,6 +537,11 @@ function gameMarkup(room) {
 }
 
 function boardMarkup(room) {
+  const playerCount = Math.max(2, Math.min(6, room.players.length));
+  const volumes = resourceVolumesByPlayers[playerCount];
+  const logistics = logisticsByPlayers[playerCount];
+  const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
+  const myTurn = canUserAct(room);
   return `
     <div class="board">
       ${state.config.boardCells
@@ -559,7 +553,32 @@ function boardMarkup(room) {
           </button>`;
         })
         .join("")}
-      <div class="boardCenter">${proleumLogo}<span>контракт · ресурс · логистика · риск · маржа</span></div>
+      <div class="boardCenter">
+        <div class="boardLogo">${proleumLogo}<span>торговый день ${room.day}</span></div>
+        <div class="centerMarket">
+          <div class="centerSection">
+            <h3>Рынок ресурса</h3>
+            <div class="resourceGrid compact">
+              ${Object.entries(resourceMeta)
+                .map(
+                  ([code, meta]) => `<button class="resourceTile" style="border-color:${meta.color}" data-buy-resource="${code}" ${myTurn ? "" : "disabled"}>
+                    <strong>${code}</strong><span>${meta.basePrice} млн</span><small>${volumes[code]} жет.</small><em>Купить</em>
+                  </button>`,
+                )
+                .join("")}
+            </div>
+          </div>
+          <div class="centerSection">
+            <h3>Логистика</h3>
+            <div class="logisticsGrid compact"><div>ЖД <strong>${logistics.rail}</strong></div><div>База <strong>${logistics.depot}</strong></div></div>
+          </div>
+          <details class="marketEvent">
+            <summary>${escapeHtml(marketCard.title)}</summary>
+            <p>${escapeHtml(marketCard.description)}</p>
+            <small>${escapeHtml(marketCard.effect || "")}</small>
+          </details>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -708,6 +727,33 @@ function modalMarkup() {
   return "";
 }
 
+function turnPromptMarkup() {
+  const room = activeRoom();
+  if (!room || modalState || diceState || !canUserAct(room) || room.turnState?.rolled || room.turnState?.promptDismissed) return "";
+  const player = currentPlayer(room);
+  return `<div class="turnPrompt">
+    <section class="turnPromptCard">
+      <span class="kicker">Ваш ход</span>
+      <h2>${escapeHtml(player.name)}, бросьте кубики</h2>
+      <p>Сначала бросок 2D6, затем выберите действие клетки или коммерческое действие: контракт, ресурс, актив, событие.</p>
+      <div class="promptDice"><span>?</span><span>?</span></div>
+      <div class="modalActions">
+        <button class="primaryButton heroRoll" data-action="roll">Бросить кубики</button>
+        <button class="secondaryButton" data-action="dismiss-turn-prompt">Сначала осмотреть стол</button>
+      </div>
+    </section>
+  </div>`;
+}
+
+function dismissTurnPrompt() {
+  const room = activeRoom();
+  if (room) {
+    room.turnState ||= { rolled: false };
+    room.turnState.promptDismissed = true;
+  }
+  commit();
+}
+
 function cellActionMarkup(cell, myTurn) {
   const disabled = myTurn ? "" : "disabled";
   if (["supplier", "market"].includes(cell.type)) {
@@ -831,8 +877,9 @@ function bindCommon() {
     }),
   );
   document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", () => navigator.clipboard?.writeText(button.dataset.copy)));
-  document.querySelector("[data-action='roll']")?.addEventListener("click", roll);
+  document.querySelectorAll("[data-action='roll']").forEach((button) => button.addEventListener("click", roll));
   document.querySelector("[data-action='end-turn']")?.addEventListener("click", endTurn);
+  document.querySelector("[data-action='dismiss-turn-prompt']")?.addEventListener("click", dismissTurnPrompt);
   document.querySelector("[data-action='next-day']")?.addEventListener("click", nextDay);
   document.querySelectorAll("[data-buy-resource]").forEach((button) =>
     button.addEventListener("click", () => {

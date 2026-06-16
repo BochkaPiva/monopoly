@@ -37,6 +37,14 @@ button:disabled {
   min-height: 100vh;
 }
 
+.gameApp {
+  display: block;
+}
+
+.gameApp .sidebar {
+  display: none;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -173,12 +181,49 @@ button:disabled {
     linear-gradient(180deg, #f8f7f2 0%, #efede6 100%);
 }
 
+.gameApp .workspace {
+  min-height: 100vh;
+  padding: 18px 22px 92px;
+}
+
 .topbar {
   display: flex;
   gap: 20px;
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 18px;
+}
+
+.gameApp .topbar {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.topIdentity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.gameApp .topIdentity .proleumLogo {
+  padding: 10px 14px;
+  color: #ffffff;
+  background: #070707;
+  border-radius: 8px;
+}
+
+.gameApp h1 {
+  font-size: clamp(30px, 3.4vw, 54px);
+}
+
+.miniNav {
+  min-height: 36px;
+  padding: 8px 12px;
+  color: #171717;
+  background: #ffffff;
+  border: 1px solid #e0d5a5;
+  border-radius: 6px;
+  font-weight: 800;
 }
 
 h1,
@@ -411,15 +456,15 @@ textarea:focus {
 
 .gameLayout {
   display: grid;
-  grid-template-columns: minmax(390px, 0.78fr) minmax(460px, 1fr) 300px;
-  gap: 16px;
+  grid-template-columns: minmax(720px, 1fr) minmax(330px, 0.42fr);
+  gap: 18px;
   align-items: start;
   padding-bottom: 132px;
 }
 
 .boardPanel {
   position: sticky;
-  top: 18px;
+  top: 14px;
 }
 
 .board {
@@ -428,12 +473,15 @@ textarea:focus {
   grid-template-columns: repeat(11, minmax(38px, 1fr));
   grid-template-rows: repeat(11, minmax(38px, 1fr));
   aspect-ratio: 1;
+  width: min(100%, calc(100vh - 135px));
+  min-width: 680px;
   max-height: calc(100vh - 150px);
+  margin-inline: auto;
   padding: 10px;
   background: #ffffff;
   border: 1px solid #d7d0bf;
   border-radius: 8px;
-  box-shadow: 0 18px 54px rgba(20, 17, 10, 0.14);
+  box-shadow: 0 24px 70px rgba(20, 17, 10, 0.18);
 }
 
 .boardCell {
@@ -570,11 +618,11 @@ textarea:focus {
 
 .boardCenter {
   position: absolute;
-  inset: 19%;
+  inset: 16.5%;
   display: grid;
-  place-content: center;
-  gap: 10px;
-  padding: 22px;
+  align-content: stretch;
+  gap: 14px;
+  padding: 18px;
   text-align: center;
   color: #ffffff;
   background:
@@ -609,9 +657,87 @@ textarea:focus {
   font-weight: 700;
 }
 
+.boardLogo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 204, 0, 0.22);
+}
+
+.boardLogo > span {
+  color: #ffcc00;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.centerMarket {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 10px;
+  text-align: left;
+}
+
+.centerSection {
+  display: grid;
+  gap: 8px;
+}
+
+.centerSection h3,
+.marketEvent summary {
+  margin: 0;
+  color: #ffcc00;
+  font-size: 13px;
+}
+
+.resourceGrid.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.resourceGrid.compact .resourceTile {
+  min-height: 72px;
+  padding: 8px;
+  color: #ffffff;
+  background: #141414;
+}
+
+.resourceGrid.compact .resourceTile span {
+  color: #ffffff;
+}
+
+.resourceGrid.compact .resourceTile em {
+  color: #ffcc00;
+}
+
+.logisticsGrid.compact {
+  gap: 7px;
+}
+
+.logisticsGrid.compact div {
+  color: #ffffff;
+  background: #141414;
+  border-color: #363020;
+}
+
+.marketEvent {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  background: #12110e;
+  border: 1px solid #332b15;
+  border-radius: 8px;
+}
+
+.marketEvent p,
+.marketEvent small {
+  color: #d7d0c0;
+  font-size: 12px;
+}
+
 .marketPanel {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  align-content: start;
 }
 
 .toolbar,
@@ -629,17 +755,24 @@ textarea:focus {
 }
 
 .commandBar {
-  padding: 16px;
-  background: #ffffff;
-  border: 1px solid #ddd7c8;
-  border-radius: 8px;
-  box-shadow: 0 12px 34px rgba(20, 17, 10, 0.08);
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 204, 0, 0.11), transparent 46%),
+    #111111;
+  border: 1px solid #2c281c;
+  border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .commandBar p {
   max-width: 420px;
   margin: 6px 0 0;
   font-size: 13px;
+}
+
+.commandBar h2,
+.commandBar p {
+  color: #ffffff;
 }
 
 .diceConsole {
@@ -740,23 +873,42 @@ textarea:focus {
 
 .dealColumns {
   display: grid;
-  grid-template-columns: 1.25fr 0.9fr;
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 
 .deckColumn {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 9px;
+}
+
+.deckColumn h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.deckColumn h3::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: #ffcc00;
+  border-radius: 999px;
 }
 
 .entityCard {
   display: grid;
   gap: 8px;
-  padding: 13px;
-  background: linear-gradient(180deg, #ffffff, #fbfaf6);
-  border: 1px solid #ddd7c8;
-  border-radius: 7px;
+  padding: 14px;
+  color: #f8f6ef;
+  background:
+    linear-gradient(150deg, rgba(255, 204, 0, 0.12), transparent 45%),
+    #101010;
+  border: 1px solid #342d19;
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
 .cardAction {
@@ -782,11 +934,25 @@ textarea:focus {
 
 .entityCard strong {
   display: block;
+  color: #ffffff;
 }
 
 .entityCard p {
   margin-bottom: 0;
+  color: #d6d0c3;
   font-size: 13px;
+}
+
+.entityCard span {
+  color: #ffcc00;
+}
+
+.entityCard small {
+  color: #bfb5a0;
+}
+
+.gameApp .inspector {
+  display: none;
 }
 
 .resourceLine {
@@ -1083,6 +1249,65 @@ textarea:focus {
   place-items: center;
   background: rgba(0, 0, 0, 0.42);
   pointer-events: none;
+}
+
+.turnPrompt {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 204, 0, 0.18), transparent 28%),
+    rgba(0, 0, 0, 0.54);
+  backdrop-filter: blur(5px);
+}
+
+.turnPromptCard {
+  width: min(520px, 100%);
+  padding: 28px;
+  color: #ffffff;
+  background:
+    linear-gradient(145deg, rgba(255, 204, 0, 0.14), transparent 45%),
+    #080808;
+  border: 1px solid #ffcc00;
+  border-radius: 14px;
+  box-shadow: 0 34px 110px rgba(0, 0, 0, 0.58);
+  animation: modalIn 0.2s ease-out;
+}
+
+.turnPromptCard h2 {
+  color: #ffffff;
+  font-size: 34px;
+}
+
+.turnPromptCard p {
+  color: #d8cfbd;
+}
+
+.promptDice {
+  display: flex;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.promptDice span {
+  display: grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  color: #050505;
+  background: #ffcc00;
+  border-radius: 12px;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.heroRoll {
+  min-height: 48px;
+  padding-inline: 22px;
+  font-size: 17px;
 }
 
 .diceOverlay p {
