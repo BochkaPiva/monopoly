@@ -274,10 +274,11 @@ function escapeHtml(value = "") {
 function scorePlayer(player) {
   return (
     Math.floor(player.money / 5) +
-    (player.completedContracts?.length || 0) +
+    (player.completedContracts || []).reduce((sum, contract) => sum + ({ "малый": 1, "средний": 2, "крупный": 3, "тендер": 4 }[contract.type] || 1), 0) +
     Math.floor(player.reputation / 2) +
     Math.floor(player.efficiency / 2) +
-    Math.floor(player.influence / 2)
+    Math.floor(player.influence / 2) -
+    (player.failedContracts?.length || 0) * 2
   );
 }
 
@@ -304,8 +305,10 @@ function normalizeState(nextState) {
     room.marketCardIndex ||= 0;
     room.log ||= [];
     room.players ||= [];
-    room.usedLogistics ||= { rail: 0, depot: 0 };
-    room.turnState ||= { rolled: false };
+    room.assetOwnership ||= {};
+    room.turnState = normalizeTurnState(room.turnState);
+    room.market ||= createMarket(room);
+    normalizeMarket(room);
     room.players.forEach((player, index) => normalizePlayer(player, index));
   });
 }
@@ -321,8 +324,69 @@ function normalizePlayer(player, index = 0) {
   player.warehouse ||= { REG: 0, PRM: 0, DTL: 0 };
   player.activeContracts ||= [];
   player.completedContracts ||= [];
+  player.failedContracts ||= [];
   player.assets ||= [];
   player.proleumCards ||= [];
+  player.lap ??= 0;
+  player.assetPurchasedLap ??= -1;
+}
+
+function normalizeTurnState(turnState = {}) {
+  return {
+    rolled: Boolean(turnState.rolled),
+    promptDismissed: Boolean(turnState.promptDismissed),
+    commercialActionUsed: Boolean(turnState.commercialActionUsed),
+    cellActionUsed: Boolean(turnState.cellActionUsed),
+    proleumPlayed: Boolean(turnState.proleumPlayed),
+    negotiationUsed: Boolean(turnState.negotiationUsed),
+  };
+}
+
+function createMarket(room) {
+  const playerCount = Math.max(2, Math.min(6, room.players?.length || 2));
+  const volumes = clone(resourceVolumesByPlayers[playerCount]);
+  const logistics = clone(logisticsByPlayers[playerCount]);
+  const prices = Object.fromEntries(Object.entries(resourceMeta).map(([code, meta]) => [code, meta.basePrice]));
+  applyMarketCardEffect(prices, volumes, logistics, state.config.marketCards[room.marketCardIndex % state.config.marketCards.length]);
+  return {
+    day: room.day || 1,
+    cardId: state.config.marketCards[room.marketCardIndex % state.config.marketCards.length]?.id,
+    prices,
+    stock: volumes,
+    logistics,
+    usedLogistics: { rail: 0, depot: 0 },
+  };
+}
+
+function normalizeMarket(room) {
+  room.market ||= createMarket(room);
+  room.market.prices ||= {};
+  room.market.stock ||= {};
+  room.market.logistics ||= {};
+  room.market.usedLogistics ||= { rail: 0, depot: 0 };
+  Object.entries(resourceMeta).forEach(([code, meta]) => {
+    room.market.prices[code] ??= meta.basePrice;
+    room.market.stock[code] ??= resourceVolumesByPlayers[Math.max(2, Math.min(6, room.players.length))][code];
+  });
+  room.market.logistics.rail ??= logisticsByPlayers[Math.max(2, Math.min(6, room.players.length))].rail;
+  room.market.logistics.depot ??= logisticsByPlayers[Math.max(2, Math.min(6, room.players.length))].depot;
+  room.market.usedLogistics.rail ??= 0;
+  room.market.usedLogistics.depot ??= 0;
+}
+
+function applyMarketCardEffect(prices, stock, logistics, marketCard) {
+  if (!marketCard) return;
+  if (marketCard.id === "market-dtl-season") {
+    prices.DTL += 1;
+    stock.DTL = Math.max(0, stock.DTL - 1);
+  }
+  if (marketCard.id === "market-reg-surplus") {
+    prices.REG = Math.max(1, prices.REG - 1);
+    stock.REG += 2;
+  }
+  if (marketCard.id === "market-rail-pressure") {
+    logistics.rail = Math.max(0, logistics.rail - 1);
+  }
 }
 
 function currentPlayer(room) {
@@ -367,6 +431,127 @@ function missingResources(contract) {
 
 function contractReady(contract) {
   return Object.values(missingResources(contract)).every((value) => value === 0);
+}
+
+function currentCell(room, player = currentPlayer(room)) {
+  return state.config.boardCells[player?.position || 0];
+}
+
+function isCurrentCell(room, cellId, player = currentPlayer(room)) {
+  return currentCell(room, player)?.id === cellId;
+}
+
+function warehouseUsed(player) {
+  return resourceTotal(player.warehouse || {});
+}
+
+function warehouseCapacity(player) {
+  const depotBonus = (player.assets || []).filter((item) => item.type === "depot").length * 2;
+  return 3 + depotBonus;
+}
+
+function resourceBuyLimit(room, player) {
+  const cellType = currentCell(room, player)?.type;
+  return ["supplier", "market"].includes(cellType) ? 3 : 2;
+}
+
+function actionGate(room, player, options = {}) {
+  if (!room || !player || !canUserAct(room)) return "Сейчас ходит другой игрок.";
+  const turn = normalizeTurnState(room.turnState);
+  const cell = currentCell(room, player);
+  if (options.requiresRolled && !turn.rolled) return "Сначала бросьте кубики.";
+  if (options.commercial && turn.commercialActionUsed) return "Коммерческое действие в этот ход уже использовано.";
+  if (options.cellAction && turn.cellActionUsed) return "Действие клетки в этот ход уже использовано.";
+  if (options.cells?.length && !options.cells.includes(cell?.type)) {
+    return `Это действие доступно на клетках: ${options.cells.map(cellTypeLabel).join(", ")}.`;
+  }
+  if (options.cellId && !isCurrentCell(room, options.cellId, player)) return "Нельзя выполнить действие чужой клетки: нужно стоять на ней.";
+  return "";
+}
+
+function markCommercialAction(room) {
+  room.turnState = normalizeTurnState(room.turnState);
+  room.turnState.commercialActionUsed = true;
+  room.turnState.promptDismissed = true;
+}
+
+function markCellAction(room) {
+  room.turnState = normalizeTurnState(room.turnState);
+  room.turnState.cellActionUsed = true;
+  room.turnState.promptDismissed = true;
+}
+
+function rejectAction(room, message) {
+  if (room && message) room.log.unshift(`Действие недоступно: ${message}`);
+  modalState = null;
+  commit();
+}
+
+function cellTypeLabel(type) {
+  const labels = {
+    supplier: "поставщик",
+    market: "биржа",
+    contract: "контракт",
+    client: "клиент",
+    tender: "тендер",
+    rail: "ЖД-узел",
+    depot: "нефтебаза",
+    road: "автомаршрут",
+    asset: "актив",
+    proleum: "ПРОЛЕУМ",
+    event: "событие",
+    risk: "риск",
+    penalty: "штраф",
+    pause: "пауза",
+  };
+  return labels[type] || type;
+}
+
+function assetCostForCell(cell) {
+  const costs = { depot: 12, rail: 10, road: 8, client: 9, supplier: 9, asset: 8 };
+  return costs[cell?.type] || 10;
+}
+
+function routeOptions(room, contract) {
+  const total = resourceTotal(contract.resource);
+  const market = room.market || createMarket(room);
+  const availableRail = Math.max(0, (market.logistics.rail || 0) - (market.usedLogistics.rail || 0));
+  const availableDepot = Math.max(0, (market.logistics.depot || 0) - (market.usedLogistics.depot || 0));
+  const allowed = contract.routes || [];
+  const options = [];
+
+  if (allowed.some((route) => route.includes("Авто")) && total <= 2) {
+    options.push({ key: "auto", title: "Авто", cost: total, rail: 0, depot: 0, risk: 0, available: true, note: "Быстро, без общей мощности, только малые поставки." });
+  }
+  if (allowed.some((route) => route === "ЖД" || route.includes("ЖД"))) {
+    const cost = 2 + Math.ceil(total / 2);
+    options.push({ key: "rail", title: "ЖД", cost, rail: 1, depot: 0, risk: 1, available: availableRail >= 1, note: "Дешевле на объеме, но повышает операционный риск." });
+  }
+  if (allowed.some((route) => route.includes("нефтебаза"))) {
+    const cost = 3 + Math.ceil(total / 2);
+    options.push({ key: "rail-depot", title: "ЖД + нефтебаза", cost, rail: 1, depot: 1, risk: 0, available: availableRail >= 1 && availableDepot >= 1, note: "Надежнее для крупных сделок, занимает две мощности." });
+  }
+
+  return options;
+}
+
+function riskLevel(contract, route, player) {
+  const base = { "низкий": 0, "средний": 1, "высокий": 2, "тендер": 2 }[contract.risk] ?? 1;
+  const efficiencyReduce = player.efficiency >= 5 ? 1 : 0;
+  return Math.max(0, base + (route?.risk || 0) - efficiencyReduce);
+}
+
+function resolveRisk(room, player, contract, route) {
+  const risk = riskLevel(contract, route, player);
+  if (risk <= 0) return { triggered: false, risk, penalty: 0, dice: null, eventCard: null };
+  const dice = Math.ceil(Math.random() * 6);
+  const threshold = risk === 1 ? 2 : risk === 2 ? 3 : 6;
+  const triggered = dice <= threshold;
+  if (!triggered) return { triggered, risk, penalty: 0, dice, eventCard: null };
+  const eventCard = state.config.events[(room.log.length + room.day + risk) % state.config.events.length];
+  const penalty = Math.min(4, 1 + risk);
+  player.money = Math.max(0, player.money - penalty);
+  return { triggered, risk, penalty, dice, eventCard };
 }
 
 function render() {
@@ -487,12 +672,14 @@ function roomCardMarkup(room) {
 
 function gameMarkup(room) {
   normalizeState(state);
-  const playerCount = Math.max(2, Math.min(6, room.players.length));
   const actingPlayer = currentPlayer(room);
   const mine = userPlayer(room);
   const myTurn = canUserAct(room);
   const rolled = Boolean(room.turnState?.rolled);
+  const turnState = normalizeTurnState(room.turnState);
   const selected = state.config.boardCells.find((cell) => cell.id === room.selectedEntityId) || state.config.boardCells[0];
+  const contractReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["contract", "client"] }) : "Вы не в комнате.";
+  const tenderReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["tender"] }) : "Вы не в комнате.";
   return `
     <section class="gameLayout">
       <div class="boardPanel">${boardMarkup(room)}</div>
@@ -502,6 +689,11 @@ function gameMarkup(room) {
             <span class="kicker">Сейчас ходит</span>
             <h2>${escapeHtml(actingPlayer?.name || "Нет игроков")}</h2>
             <p>${myTurn ? "Это ваш ход: выберите действие или бросьте кубики." : mine ? "Ожидайте свой ход. Ваши действия заблокированы." : "Вы наблюдатель этой комнаты."}</p>
+            <div class="turnChecklist">
+              <span class="${turnState.rolled ? "done" : ""}">Бросок</span>
+              <span class="${turnState.cellActionUsed ? "done" : ""}">Клетка</span>
+              <span class="${turnState.commercialActionUsed ? "done" : ""}">Коммерция</span>
+            </div>
           </div>
           <div class="diceConsole ${diceState ? "isRolling" : ""}">
             <div class="dicePair"><span>${diceState?.a || "?"}</span><span>${diceState?.b || "?"}</span></div>
@@ -513,14 +705,14 @@ function gameMarkup(room) {
         <div class="dealColumns">
           <section class="deckColumn"><h3>Открытые контракты</h3>${state.config.contracts
             .slice(0, 5)
-            .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять контракт", disabled: !myTurn }))
+            .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять контракт", disabled: Boolean(contractReason), reason: contractReason }))
             .join("")}</section>
           <section class="deckColumn"><h3>Тендер дня</h3>${state.config.tenders
             .slice(0, 1)
-            .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: !myTurn }))
+            .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason }))
             .join("")}</section>
         </div>
-        ${mine ? activeContractsMarkup(mine, myTurn) : ""}
+        ${mine ? activeContractsMarkup(room, mine) : ""}
         ${playersMarkup(room.players)}
       </div>
       <aside class="inspector">
@@ -537,18 +729,22 @@ function gameMarkup(room) {
 }
 
 function boardMarkup(room) {
-  const playerCount = Math.max(2, Math.min(6, room.players.length));
-  const volumes = resourceVolumesByPlayers[playerCount];
-  const logistics = logisticsByPlayers[playerCount];
+  normalizeMarket(room);
+  const market = room.market;
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   const myTurn = canUserAct(room);
+  const player = currentPlayer(room);
+  const resourceReason = player ? actionGate(room, player, { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Нет игрока.";
   return `
     <div class="board">
       ${state.config.boardCells
         .map((cell, index) => {
           const players = room.players.filter((player) => player.position === index);
-          return `<button class="boardCell type-${cell.type}" data-cell="${cell.id}">
+          const owner = room.assetOwnership?.[cell.id];
+          const isStanding = player?.position === index;
+          return `<button class="boardCell type-${cell.type} ${owner ? "ownedCell" : ""} ${isStanding ? "currentCell" : ""}" data-cell="${cell.id}">
             <span>${index + 1}</span><strong>${escapeHtml(cell.title)}</strong>
+            ${owner ? `<em>${escapeHtml(owner.ownerName)}</em>` : ""}
             <div class="tokens">${players.map((player) => `<i style="background:${player.color}" title="${escapeHtml(player.name)}"></i>`).join("")}</div>
           </button>`;
         })
@@ -561,8 +757,8 @@ function boardMarkup(room) {
             <div class="resourceGrid compact">
               ${Object.entries(resourceMeta)
                 .map(
-                  ([code, meta]) => `<button class="resourceTile" style="border-color:${meta.color}" data-buy-resource="${code}" ${myTurn ? "" : "disabled"}>
-                    <strong>${code}</strong><span>${meta.basePrice} млн</span><small>${volumes[code]} жет.</small><em>Купить</em>
+                  ([code, meta]) => `<button class="resourceTile" style="border-color:${meta.color}" data-buy-resource="${code}" ${resourceReason ? "disabled" : ""} title="${escapeHtml(resourceReason || `Остаток: ${market.stock[code]} жетонов`)}">
+                    <strong>${code}</strong><span>${market.prices[code]} млн</span><small>остаток ${market.stock[code]} жет.</small><em>Купить</em>
                   </button>`,
                 )
                 .join("")}
@@ -570,7 +766,7 @@ function boardMarkup(room) {
           </div>
           <div class="centerSection">
             <h3>Логистика</h3>
-            <div class="logisticsGrid compact"><div>ЖД <strong>${logistics.rail}</strong></div><div>База <strong>${logistics.depot}</strong></div></div>
+            <div class="logisticsGrid compact"><div>ЖД <strong>${Math.max(0, market.logistics.rail - market.usedLogistics.rail)}/${market.logistics.rail}</strong></div><div>База <strong>${Math.max(0, market.logistics.depot - market.usedLogistics.depot)}/${market.logistics.depot}</strong></div></div>
           </div>
           <details class="marketEvent">
             <summary>${escapeHtml(marketCard.title)}</summary>
@@ -587,7 +783,7 @@ function entityCardMarkup(entity, compact = false, action = null) {
     ? `<div class="resourceLine">${Object.entries(entity.resource).map(([code, amount]) => `<span>${code} x${amount}</span>`).join("")}</div>`
     : "";
   const actionButton = action
-    ? `<button class="cardAction" data-${action.action}="${entity.id}" ${action.disabled ? "disabled" : ""}>${escapeHtml(action.label)}</button>`
+    ? `<button class="cardAction" data-${action.action}="${entity.id}" ${action.disabled ? "disabled" : ""} title="${escapeHtml(action.reason || "")}">${escapeHtml(action.label)}</button>${action.disabled && action.reason ? `<small class="lockReason">${escapeHtml(action.reason)}</small>` : ""}`
     : "";
   return `
     <article class="entityCard ${compact ? "compact" : ""}">
@@ -599,7 +795,7 @@ function entityCardMarkup(entity, compact = false, action = null) {
     </article>`;
 }
 
-function activeContractsMarkup(player, myTurn) {
+function activeContractsMarkup(room, player) {
   return `<section class="panel activeDealsPanel">
     <div class="sectionHead"><div><span class="kicker">Ваш планшет</span><h3>Активные сделки</h3></div><span>${player.activeContracts.length}/3 слота</span></div>
     ${
@@ -608,6 +804,16 @@ function activeContractsMarkup(player, myTurn) {
             .map((contract) => {
               const missing = missingResources(contract);
               const progress = resourceTotal(contract.filled) / Math.max(1, resourceTotal(contract.resource));
+              const fillReason = contractReady(contract)
+                ? "Ресурс уже собран."
+                : actionGate(room, player, { requiresRolled: true, commercial: true });
+              const closeReason = !contractReady(contract)
+                ? "Сначала обеспечьте все ресурсы."
+                : actionGate(room, player, { requiresRolled: true, commercial: true });
+              const routes = routeOptions(room, contract);
+              const routeHint = routes.length
+                ? routes.map((route) => `${route.title}: ${route.available ? `${route.cost} млн, риск ${riskLevel(contract, route, player)}` : "нет мощности"}`).join(" · ")
+                : "Нет доступного маршрута по условиям контракта.";
               return `<article class="activeDeal">
                 <div><strong>${escapeHtml(contract.title)}</strong><span>${escapeHtml(contract.type)} · срок ${contract.duration} · доход ${contract.income} млн</span></div>
                 <div class="progressTrack"><i style="width:${Math.round(progress * 100)}%"></i></div>
@@ -615,10 +821,11 @@ function activeContractsMarkup(player, myTurn) {
                   .map(([code, amount]) => `<span>${code} ${contract.filled?.[code] || 0}/${amount}</span>`)
                   .join("")}</div>
                 <div class="dealActions">
-                  <button class="secondaryButton" data-fill-contract="${contract.instanceId}" ${myTurn && !contractReady(contract) ? "" : "disabled"}>Обеспечить ресурс</button>
-                  <button class="primaryButton" data-close-contract="${contract.instanceId}" ${myTurn && contractReady(contract) ? "" : "disabled"}>Закрыть поставку</button>
+                  <button class="secondaryButton" data-fill-contract="${contract.instanceId}" ${fillReason ? "disabled" : ""} title="${escapeHtml(fillReason)}">Обеспечить ресурс</button>
+                  <button class="primaryButton" data-plan-route="${contract.instanceId}" ${closeReason ? "disabled" : ""} title="${escapeHtml(closeReason)}">Выбрать маршрут</button>
                 </div>
                 ${Object.values(missing).some(Boolean) ? `<small>Не хватает: ${Object.entries(missing).filter(([, amount]) => amount).map(([code, amount]) => `${code} x${amount}`).join(", ")}</small>` : `<small>Ресурс собран. Можно закрывать поставку.</small>`}
+                <small class="routeHint">${escapeHtml(routeHint)}</small>
               </article>`;
             })
             .join("")
@@ -650,7 +857,7 @@ function playerTabletMarkup(player, isCurrent) {
     </div>
     <details open>
       <summary>Склад</summary>
-      <div class="tabletChips">${stock}</div>
+      <div class="tabletChips">${stock}<span>место: <strong>${warehouseUsed(player)}/${warehouseCapacity(player)}</strong></span></div>
     </details>
     <details>
       <summary>Контракты</summary>
@@ -658,7 +865,11 @@ function playerTabletMarkup(player, isCurrent) {
     </details>
     <details>
       <summary>Активы и карты</summary>
-      <div class="tabletList">${player.assets.map((assetItem) => `<span>${escapeHtml(assetItem.title)}</span>`).join("") || "<span>Активов пока нет</span>"}</div>
+      <div class="tabletList">${player.assets.map((assetItem) => `<span>${escapeHtml(assetItem.title)}</span>`).join("") || "<span>Активов пока нет</span>"}${player.proleumCards.map((cardItem) => `<span>ПРОЛЕУМ: ${escapeHtml(cardItem.title)}</span>`).join("")}</div>
+    </details>
+    <details>
+      <summary>История</summary>
+      <div class="tabletList"><span>Закрыто: ${player.completedContracts.length}</span><span>Сорвано: ${player.failedContracts?.length || 0}</span><span>Круг: ${player.lap || 0}</span></div>
     </details>
   </article>`;
 }
@@ -682,27 +893,39 @@ function modalMarkup() {
   if (modalState.type === "cell") {
     const cell = state.config.boardCells.find((item) => item.id === modalState.cellId);
     if (!cell) return "";
+    const owner = room?.assetOwnership?.[cell.id];
+    const standing = room && mine ? isCurrentCell(room, cell.id, mine) : false;
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
         <span class="kicker">Клетка ${escapeHtml(cell.type)}</span>
         <h2>${escapeHtml(cell.title)}</h2>
         <p>${escapeHtml(cell.description)}</p>
+        <div class="cellStatus">
+          <span>${standing ? "Вы стоите на этой клетке" : "Действия доступны только текущему игроку на своей клетке"}</span>
+          ${owner ? `<span>Владелец: ${escapeHtml(owner.ownerName)}</span>` : `<span>Актив свободен</span>`}
+        </div>
         ${cellActionMarkup(cell, myTurn)}
       </section>
     </div>`;
   }
   if (modalState.type === "resource") {
     const meta = resourceMeta[modalState.code];
+    const stock = room?.market?.stock?.[modalState.code] ?? 0;
+    const limit = room && mine ? resourceBuyLimit(room, mine) : 2;
+    const capacityLeft = mine ? Math.max(0, warehouseCapacity(mine) - warehouseUsed(mine)) : 0;
+    const gate = room && mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Вы не в комнате.";
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
         <span class="kicker">Закупка ресурса</span>
         <h2>${modalState.code} · ${escapeHtml(meta.name)}</h2>
-        <p>Базовая цена: ${meta.basePrice} млн за жетон. За действие можно купить до 2 жетонов и положить их на склад.</p>
+        <p>Цена рынка: ${room?.market?.prices?.[modalState.code] ?? meta.basePrice} млн за жетон. Остаток рынка: ${stock}. Свободно на складе: ${capacityLeft}. Лимит действия: ${limit}.</p>
+        ${gate ? `<div class="hintBox">${escapeHtml(gate)}</div>` : ""}
         <div class="modalActions">
-          <button class="primaryButton" data-buy-resource-confirm="${modalState.code}" data-amount="1" ${myTurn ? "" : "disabled"}>Купить 1</button>
-          <button class="primaryButton" data-buy-resource-confirm="${modalState.code}" data-amount="2" ${myTurn ? "" : "disabled"}>Купить 2</button>
+          <button class="primaryButton" data-buy-resource-confirm="${modalState.code}" data-amount="1" ${gate || stock < 1 || capacityLeft < 1 ? "disabled" : ""}>Купить 1</button>
+          <button class="primaryButton" data-buy-resource-confirm="${modalState.code}" data-amount="2" ${gate || stock < 2 || capacityLeft < 2 || limit < 2 ? "disabled" : ""}>Купить 2</button>
+          <button class="primaryButton" data-buy-resource-confirm="${modalState.code}" data-amount="3" ${gate || stock < 3 || capacityLeft < 3 || limit < 3 ? "disabled" : ""}>Купить 3</button>
         </div>
       </section>
     </div>`;
@@ -718,8 +941,47 @@ function modalMarkup() {
         <p>${escapeHtml(contract.description)}</p>
         <div class="resourceLine">${Object.entries(contract.resource).map(([code, amount]) => `<span>${code} ${contract.filled?.[code] || 0}/${amount}</span>`).join("")}</div>
         <div class="modalActions">
-          <button class="secondaryButton" data-fill-contract="${contract.instanceId}" ${myTurn && !contractReady(contract) ? "" : "disabled"}>Докупить недостающее</button>
-          <button class="primaryButton" data-close-contract="${contract.instanceId}" ${myTurn && contractReady(contract) ? "" : "disabled"}>Закрыть поставку</button>
+          <button class="secondaryButton" data-fill-contract="${contract.instanceId}" ${myTurn && !contractReady(contract) ? "" : "disabled"}>Обеспечить ресурс</button>
+          <button class="primaryButton" data-plan-route="${contract.instanceId}" ${myTurn && contractReady(contract) ? "" : "disabled"}>Выбрать маршрут</button>
+        </div>
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "route" && mine) {
+    const contract = mine.activeContracts.find((item) => item.instanceId === modalState.contractId);
+    if (!contract) return "";
+    const routes = routeOptions(room, contract);
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet routeSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="kicker">Маршрут поставки</span>
+        <h2>${escapeHtml(contract.title)}</h2>
+        <p>Выберите логистику. Закрытие поставки занимает коммерческое действие, списывает мощность дня и запускает проверку риска.</p>
+        <div class="routeGrid">
+          ${routes
+            .map((route) => `<button class="routeOption" data-close-contract="${contract.instanceId}" data-route="${route.key}" ${route.available ? "" : "disabled"}>
+              <strong>${escapeHtml(route.title)}</strong>
+              <span>Стоимость ${route.cost} млн</span>
+              <span>Риск сделки ${riskLevel(contract, route, mine)}</span>
+              <small>${escapeHtml(route.note)}</small>
+              ${route.rail || route.depot ? `<em>Мощность: ЖД ${route.rail}, база ${route.depot}</em>` : `<em>Без общей мощности</em>`}
+            </button>`)
+            .join("") || `<div class="hintBox">Для этого контракта нет разрешенных маршрутов.</div>`}
+        </div>
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "eventChoice") {
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="kicker">Операционное событие</span>
+        <h2>${escapeHtml(modalState.title)}</h2>
+        <p>${escapeHtml(modalState.description)}</p>
+        <div class="decisionGrid">
+          <button class="primaryButton" data-action="resolve-event" data-choice="pay">Заплатить и сохранить темп</button>
+          <button class="secondaryButton" data-action="resolve-event" data-choice="rep">Потерять репутацию</button>
+          <button class="secondaryButton" data-action="resolve-event" data-choice="delay">Принять задержку</button>
         </div>
       </section>
     </div>`;
@@ -755,34 +1017,45 @@ function dismissTurnPrompt() {
 }
 
 function cellActionMarkup(cell, myTurn) {
+  const room = activeRoom();
+  const player = room ? userPlayer(room) : null;
   const disabled = myTurn ? "" : "disabled";
   if (["supplier", "market"].includes(cell.type)) {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["supplier", "market"] }) : "Недоступно.";
     return `<div class="modalActions">
-      <button class="secondaryButton" data-buy-resource="REG" ${disabled}>Купить REG</button>
-      <button class="secondaryButton" data-buy-resource="PRM" ${disabled}>Купить PRM</button>
-      <button class="secondaryButton" data-buy-resource="DTL" ${disabled}>Купить DTL</button>
+      <button class="secondaryButton" data-buy-resource="REG" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить REG</button>
+      <button class="secondaryButton" data-buy-resource="PRM" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить PRM</button>
+      <button class="secondaryButton" data-buy-resource="DTL" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить DTL</button>
     </div>`;
   }
   if (["asset", "depot", "rail", "road", "client"].includes(cell.type)) {
-    return `<div class="decisionBox"><strong>Покупаемый актив</strong><p>Актив дает преимущество владельцу, но не блокирует базовые действия другим игрокам.</p><button class="primaryButton" data-buy-cell-asset="${cell.id}" ${disabled}>Купить актив за 10 млн</button></div>`;
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["asset", "depot", "rail", "road", "client"] }) : "Недоступно.";
+    const owner = room?.assetOwnership?.[cell.id];
+    const price = assetCostForCell(cell);
+    const reason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : gate;
+    return `<div class="decisionBox"><strong>Покупаемый актив · ${price} млн</strong><p>Актив дает преимущество владельцу, но не блокирует базовые действия другим игрокам.</p>${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${reason ? "disabled" : disabled}>Купить актив</button></div>`;
   }
   if (cell.type === "contract") {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["contract"] }) : "Недоступно.";
     return `<div class="modalActions">${state.config.contracts
       .slice(0, 3)
-      .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${disabled}>${escapeHtml(item.title)}</button>`)
+      .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">${escapeHtml(item.title)}</button>`)
       .join("")}</div>`;
   }
   if (cell.type === "tender") {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["tender"] }) : "Недоступно.";
     return `<div class="modalActions">${state.config.tenders
       .slice(0, 1)
-      .map((item) => `<button class="primaryButton" data-take-tender="${item.id}" ${disabled}>Заявиться на тендер</button>`)
+      .map((item) => `<button class="primaryButton" data-take-tender="${item.id}" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Заявиться на тендер</button>`)
       .join("")}</div>`;
   }
   if (cell.type === "proleum") {
-    return `<div class="decisionBox"><strong>Экспертное решение</strong><p>Возьмите карту ПРОЛЕУМ в руку. Максимум 3 карты.</p><button class="primaryButton" data-action="draw-proleum" ${disabled}>Взять карту</button></div>`;
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["proleum"] }) : "Недоступно.";
+    return `<div class="decisionBox"><strong>Экспертное решение</strong><p>Возьмите карту ПРОЛЕУМ в руку. Максимум 3 карты.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-proleum" ${gate ? "disabled" : disabled}>Взять карту</button></div>`;
   }
   if (["event", "risk", "penalty", "pause"].includes(cell.type)) {
-    return `<div class="decisionBox"><strong>Операционный выбор</strong><p>Откройте событие и выберите, как компания решит проблему.</p><button class="primaryButton" data-action="draw-event" ${disabled}>Открыть событие</button></div>`;
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["event", "risk", "penalty", "pause"] }) : "Недоступно.";
+    return `<div class="decisionBox"><strong>Операционный выбор</strong><p>Откройте событие и выберите, как компания решит проблему.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-event" ${gate ? "disabled" : disabled}>Открыть событие</button></div>`;
   }
   return `<div class="decisionBox"><strong>Служебная клетка</strong><p>Эта клетка влияет на темп партии и обновление торгового дня.</p></div>`;
 }
@@ -893,7 +1166,13 @@ function bindCommon() {
   document.querySelectorAll("[data-take-contract]").forEach((button) => button.addEventListener("click", () => takeDeal("contracts", button.dataset.takeContract)));
   document.querySelectorAll("[data-take-tender]").forEach((button) => button.addEventListener("click", () => takeDeal("tenders", button.dataset.takeTender)));
   document.querySelectorAll("[data-fill-contract]").forEach((button) => button.addEventListener("click", () => fillContract(button.dataset.fillContract)));
-  document.querySelectorAll("[data-close-contract]").forEach((button) => button.addEventListener("click", () => closeContract(button.dataset.closeContract)));
+  document.querySelectorAll("[data-plan-route]").forEach((button) =>
+    button.addEventListener("click", () => {
+      modalState = { type: "route", contractId: button.dataset.planRoute };
+      render();
+    }),
+  );
+  document.querySelectorAll("[data-close-contract]").forEach((button) => button.addEventListener("click", () => closeContract(button.dataset.closeContract, button.dataset.route)));
   document.querySelectorAll("[data-open-cell]").forEach((button) =>
     button.addEventListener("click", () => {
       modalState = { type: "cell", cellId: button.dataset.openCell };
@@ -903,6 +1182,7 @@ function bindCommon() {
   document.querySelectorAll("[data-buy-cell-asset]").forEach((button) => button.addEventListener("click", () => buyCellAsset(button.dataset.buyCellAsset)));
   document.querySelector("[data-action='draw-proleum']")?.addEventListener("click", drawProleumCard);
   document.querySelector("[data-action='draw-event']")?.addEventListener("click", drawEventCard);
+  document.querySelectorAll("[data-action='resolve-event']").forEach((button) => button.addEventListener("click", () => resolveEventChoice(button.dataset.choice)));
   document.querySelectorAll("[data-action='close-modal']").forEach((item) =>
     item.addEventListener("click", (event) => {
       if (event.target.closest("[data-modal-body]") && !event.target.matches(".modalClose")) return;
@@ -923,16 +1203,19 @@ function bindCommon() {
 }
 
 function createRoom(name) {
-  return {
+  const room = {
     id: uid("room"),
     name,
     day: 1,
     currentTurn: 0,
     marketCardIndex: 0,
-    turnState: { rolled: false },
+    turnState: normalizeTurnState(),
     players: [createPlayer(user.name, 0)],
+    assetOwnership: {},
     log: [`${user.name} создал комнату.`],
   };
+  room.market = createMarket(room);
+  return room;
 }
 
 function createPlayer(name, index) {
@@ -968,9 +1251,9 @@ function roll() {
   if (!canUserAct(room)) return;
   if (room.turnState?.rolled) return;
   const player = currentPlayer(room);
-  const value = Math.ceil(Math.random() * 6) + Math.ceil(Math.random() * 6);
-  const a = Math.max(1, Math.min(6, value - Math.ceil(value / 2)));
-  const b = value - a;
+  const a = Math.ceil(Math.random() * 6);
+  const b = Math.ceil(Math.random() * 6);
+  const value = a + b;
   diceState = { a, b, player: player.name };
   render();
   window.setTimeout(() => {
@@ -978,10 +1261,16 @@ function roll() {
     if (!freshRoom) return;
     const freshPlayer = currentPlayer(freshRoom);
     if (!freshPlayer || freshPlayer.name !== player.name) return;
+    const previous = freshPlayer.position;
     freshPlayer.position = (freshPlayer.position + value) % 40;
+    if (freshPlayer.position < previous) {
+      freshPlayer.lap = (freshPlayer.lap || 0) + 1;
+      freshPlayer.money += 2;
+      freshRoom.log.unshift(`${freshPlayer.name}: прошел старт и получил 2 млн оборотного бонуса.`);
+    }
     const cell = state.config.boardCells[freshPlayer.position];
     freshRoom.selectedEntityId = cell.id;
-    freshRoom.turnState = { rolled: true };
+    freshRoom.turnState = normalizeTurnState({ rolled: true, promptDismissed: true });
     freshRoom.log.unshift(`${freshPlayer.name}: бросок ${value}, клетка "${cell.title}".`);
     modalState = { type: "cell", cellId: cell.id };
     diceState = null;
@@ -993,9 +1282,12 @@ function endTurn() {
   const room = activeRoom();
   if (!room || !canUserAct(room)) return;
   const player = currentPlayer(room);
+  ageContracts(room, player);
   room.log.unshift(`${player.name}: завершил ход.`);
-  room.currentTurn = (room.currentTurn + 1) % room.players.length;
-  room.turnState = { rolled: false };
+  const nextTurn = (room.currentTurn + 1) % room.players.length;
+  room.currentTurn = nextTurn;
+  room.turnState = normalizeTurnState();
+  if (nextTurn === 0) refreshTradingDay(room, "Все игроки сделали ход.");
   modalState = null;
   commit();
 }
@@ -1004,12 +1296,28 @@ function nextDay() {
   const room = activeRoom();
   if (!room) return;
   if (user.role !== "admin") return;
+  refreshTradingDay(room, "Админ обновил рынок вручную.");
+  commit();
+}
+
+function refreshTradingDay(room, reason) {
   room.day += 1;
   room.marketCardIndex = (room.marketCardIndex + 1) % state.config.marketCards.length;
-  room.usedLogistics = { rail: 0, depot: 0 };
-  room.turnState = { rolled: false };
-  room.log.unshift(`Торговый день ${room.day}: рынок обновлен.`);
-  commit();
+  room.market = createMarket(room);
+  room.players.forEach((player) => normalizePlayer(player));
+  room.log.unshift(`Торговый день ${room.day}: рынок обновлен. ${reason}`);
+}
+
+function ageContracts(room, player) {
+  player.activeContracts = (player.activeContracts || []).filter((contract) => {
+    contract.duration = Math.max(0, (contract.duration || 1) - 1);
+    if (contract.duration > 0) return true;
+    player.failedContracts ||= [];
+    player.failedContracts.push(contract);
+    player.reputation = Math.max(0, player.reputation - 1);
+    room.log.unshift(`${player.name}: срок по "${contract.title}" сорван. Репутация -1, штраф по очкам.`);
+    return false;
+  });
 }
 
 function requireTurnPlayer() {
@@ -1023,6 +1331,8 @@ function takeDeal(kind, id) {
   const player = requireTurnPlayer();
   if (!room || !player) return;
   normalizePlayer(player);
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: kind === "tenders" ? ["tender"] : ["contract", "client"] });
+  if (gate) return rejectAction(room, gate);
   if (player.activeContracts.length >= 3) {
     room.log.unshift(`${player.name}: нет свободного слота под контракт.`);
     modalState = null;
@@ -1032,6 +1342,7 @@ function takeDeal(kind, id) {
   const entity = state.config[kind].find((item) => item.id === id);
   if (!entity) return;
   player.activeContracts.push(cloneDeal(entity));
+  markCommercialAction(room);
   room.log.unshift(`${player.name}: взял ${kind === "tenders" ? "тендер" : "контракт"} "${entity.title}".`);
   modalState = null;
   commit();
@@ -1042,13 +1353,22 @@ function buyResource(code, amount = 1) {
   const player = requireTurnPlayer();
   if (!room || !player) return;
   normalizePlayer(player);
-  const price = resourceMeta[code]?.basePrice || 0;
+  normalizeMarket(room);
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: ["supplier", "market"] });
+  if (gate) return rejectAction(room, gate);
+  const limit = resourceBuyLimit(room, player);
+  const capacityLeft = warehouseCapacity(player) - warehouseUsed(player);
+  amount = Math.max(1, Math.min(amount, limit, capacityLeft, room.market.stock[code] || 0));
+  if (!amount) return rejectAction(room, "Нет места на складе или ресурс закончился на рынке.");
+  const price = room.market.prices[code] || resourceMeta[code]?.basePrice || 0;
   const cost = price * amount;
   if (player.money < cost) {
     room.log.unshift(`${player.name}: недостаточно капитала для покупки ${code}.`);
   } else {
     player.money -= cost;
     player.warehouse[code] = (player.warehouse[code] || 0) + amount;
+    room.market.stock[code] = Math.max(0, (room.market.stock[code] || 0) - amount);
+    markCommercialAction(room);
     room.log.unshift(`${player.name}: купил ${code} x${amount} за ${cost} млн.`);
   }
   modalState = null;
@@ -1059,15 +1379,24 @@ function fillContract(contractId) {
   const room = activeRoom();
   const player = requireTurnPlayer();
   if (!room || !player) return;
+  normalizeMarket(room);
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true });
+  if (gate) return rejectAction(room, gate);
   const contract = player.activeContracts.find((item) => item.instanceId === contractId);
   if (!contract) return;
   const missing = missingResources(contract);
   let totalCost = 0;
+  let purchased = 0;
+  const limit = resourceBuyLimit(room, player);
   const plan = Object.entries(missing).map(([code, amount]) => {
     const fromWarehouse = Math.min(player.warehouse[code] || 0, amount);
-    const rest = amount - fromWarehouse;
-    totalCost += rest * (resourceMeta[code].basePrice + 2);
-    return { code, amount, fromWarehouse, rest };
+    const marketNeed = amount - fromWarehouse;
+    const fromMarket = Math.min(marketNeed, room.market.stock[code] || 0, Math.max(0, limit - purchased));
+    purchased += fromMarket;
+    const urgent = Math.max(0, marketNeed - fromMarket);
+    totalCost += fromMarket * (room.market.prices[code] || resourceMeta[code].basePrice);
+    totalCost += urgent * (resourceMeta[code].basePrice + 2);
+    return { code, amount: fromWarehouse + fromMarket + urgent, fromWarehouse, fromMarket, urgent };
   });
   if (player.money < totalCost) {
     room.log.unshift(`${player.name}: не хватает капитала на срочную закупку для "${contract.title}".`);
@@ -1076,28 +1405,46 @@ function fillContract(contractId) {
       player.warehouse[code] = (player.warehouse[code] || 0) - fromWarehouse;
       contract.filled[code] = (contract.filled[code] || 0) + amount;
     });
+    plan.forEach(({ code, fromMarket }) => {
+      room.market.stock[code] = Math.max(0, (room.market.stock[code] || 0) - fromMarket);
+    });
     player.money -= totalCost;
-    room.log.unshift(`${player.name}: обеспечил ресурс по сделке "${contract.title}"${totalCost ? `, срочная закупка ${totalCost} млн` : ""}.`);
+    markCommercialAction(room);
+    const urgentCount = plan.reduce((sum, item) => sum + item.urgent, 0);
+    room.log.unshift(`${player.name}: обеспечил ресурс по сделке "${contract.title}" за ${totalCost} млн${urgentCount ? `, срочно ${urgentCount} жет.` : ""}.`);
   }
   modalState = null;
   commit();
 }
 
-function closeContract(contractId) {
+function closeContract(contractId, routeKey) {
   const room = activeRoom();
   const player = requireTurnPlayer();
   if (!room || !player) return;
+  normalizeMarket(room);
+  const gate = actionGate(room, player, { requiresRolled: true, commercial: true });
+  if (gate) return rejectAction(room, gate);
   const index = player.activeContracts.findIndex((item) => item.instanceId === contractId);
   const contract = player.activeContracts[index];
   if (!contract || !contractReady(contract)) return;
-  const logisticsCost = contract.routes?.some((route) => route.includes("ЖД")) ? 4 : Math.max(1, resourceTotal(contract.resource));
-  player.money += Math.max(0, contract.income - logisticsCost);
+  const route = routeOptions(room, contract).find((item) => item.key === routeKey);
+  if (!route) return rejectAction(room, "Выберите доступный маршрут.");
+  if (!route.available) return rejectAction(room, "На выбранный маршрут не хватает мощности дня.");
+  if (player.money < route.cost) return rejectAction(room, `Не хватает капитала на логистику: нужно ${route.cost} млн.`);
+  room.market.usedLogistics.rail += route.rail;
+  room.market.usedLogistics.depot += route.depot;
+  player.money -= route.cost;
+  const risk = resolveRisk(room, player, contract, route);
+  player.money += contract.income;
   player.reputation += contract.type === "малый" ? 1 : 0;
   player.influence += contract.type === "тендер" ? 2 : contract.type === "средний" ? 1 : 0;
   player.efficiency += contract.type === "крупный" ? 1 : 0;
+  contract.closedRoute = route.title;
+  contract.closedDay = room.day;
   player.completedContracts.push(contract);
   player.activeContracts.splice(index, 1);
-  room.log.unshift(`${player.name}: закрыл поставку "${contract.title}" и получил ${contract.income - logisticsCost} млн маржи.`);
+  markCommercialAction(room);
+  room.log.unshift(`${player.name}: закрыл "${contract.title}" через ${route.title}. Доход ${contract.income} млн, логистика ${route.cost} млн${risk.triggered ? `, риск сработал (${risk.eventCard.title}, -${risk.penalty} млн)` : risk.dice ? `, риск пройден D6=${risk.dice}` : ""}.`);
   modalState = null;
   commit();
 }
@@ -1108,12 +1455,20 @@ function buyCellAsset(cellId) {
   if (!room || !player) return;
   const cell = state.config.boardCells.find((item) => item.id === cellId);
   if (!cell) return;
-  const cost = 10;
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId, cells: ["asset", "depot", "rail", "road", "client", "supplier"] });
+  if (gate) return rejectAction(room, gate);
+  if (room.assetOwnership[cellId]) return rejectAction(room, `Актив уже принадлежит ${room.assetOwnership[cellId].ownerName}.`);
+  if (player.assetPurchasedLap === player.lap) return rejectAction(room, "За один круг можно купить только один новый актив.");
+  const cost = assetCostForCell(cell);
   if (player.money < cost) {
     room.log.unshift(`${player.name}: недостаточно капитала для покупки "${cell.title}".`);
   } else {
     player.money -= cost;
-    player.assets.push({ id: uid("asset"), title: cell.title, type: cell.type, cost });
+    const owned = { id: uid("asset"), cellId, title: cell.title, type: cell.type, cost, ownerId: player.id, ownerName: player.name };
+    player.assets.push(owned);
+    room.assetOwnership[cellId] = owned;
+    player.assetPurchasedLap = player.lap;
+    markCellAction(room);
     room.log.unshift(`${player.name}: купил актив "${cell.title}" за ${cost} млн.`);
   }
   modalState = null;
@@ -1124,11 +1479,14 @@ function drawProleumCard() {
   const room = activeRoom();
   const player = requireTurnPlayer();
   if (!room || !player) return;
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["proleum"] });
+  if (gate) return rejectAction(room, gate);
   if (player.proleumCards.length >= 3) {
     room.log.unshift(`${player.name}: рука ПРОЛЕУМ уже заполнена.`);
   } else {
     const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
     player.proleumCards.push(clone(cardItem));
+    markCellAction(room);
     room.log.unshift(`${player.name}: взял карту ПРОЛЕУМ "${cardItem.title}".`);
   }
   modalState = null;
@@ -1139,8 +1497,33 @@ function drawEventCard() {
   const room = activeRoom();
   const player = requireTurnPlayer();
   if (!room || !player) return;
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["event", "risk", "penalty", "pause"] });
+  if (gate) return rejectAction(room, gate);
   const eventCard = state.config.events[(room.log.length + room.day) % state.config.events.length];
-  room.log.unshift(`${player.name}: событие "${eventCard.title}" — ${eventCard.description}`);
+  markCellAction(room);
+  modalState = { type: "eventChoice", title: eventCard.title, description: eventCard.description, eventId: eventCard.id };
+  room.log.unshift(`${player.name}: открыл событие "${eventCard.title}".`);
+  commit();
+}
+
+function resolveEventChoice(choice) {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player || modalState?.type !== "eventChoice") return;
+  if (choice === "pay") {
+    const cost = Math.min(player.money, 2);
+    player.money -= cost;
+    room.log.unshift(`${player.name}: решил событие "${modalState.title}" деньгами (-${cost} млн).`);
+  }
+  if (choice === "rep") {
+    player.reputation = Math.max(0, player.reputation - 1);
+    room.log.unshift(`${player.name}: решил событие "${modalState.title}" через репутационные потери (-1).`);
+  }
+  if (choice === "delay") {
+    const active = player.activeContracts[0];
+    if (active) active.duration = Math.max(0, active.duration - 1);
+    room.log.unshift(`${player.name}: принял задержку по событию "${modalState.title}".`);
+  }
   modalState = null;
   commit();
 }

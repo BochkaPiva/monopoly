@@ -1,0 +1,106 @@
+# PROLEUM Monopoly: схема БД
+
+Сейчас Supabase используется как общий слой хранения комнат. Это сознательно простой вариант для быстрого тестирования правил и карточек. Игровое состояние лежит JSON-объектом в `game_rooms.state`, а не размазано по десяткам таблиц.
+
+## Текущая live-схема Supabase
+
+```sql
+create table public.game_rooms (
+  id text primary key,
+  name text,
+  state jsonb not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table public.game_events (
+  id bigserial primary key,
+  room_id text references public.game_rooms(id) on delete cascade,
+  actor_name text,
+  event_type text not null,
+  payload jsonb default '{}',
+  created_at timestamptz default now()
+);
+```
+
+RLS включен. Для прототипа открыты политики на чтение/создание/обновление комнат публичным ключом. Перед реальным VIP-тестом нужно заменить это на авторизацию через Supabase Auth и права по участникам комнаты.
+
+## JSON-состояние комнаты
+
+```json
+{
+  "id": "room-xxxx",
+  "name": "Тестовая партия PROLEUM",
+  "day": 1,
+  "currentTurn": 0,
+  "marketCardIndex": 0,
+  "market": {
+    "day": 1,
+    "cardId": "market-dtl-season",
+    "prices": { "REG": 3, "PRM": 4, "DTL": 5 },
+    "stock": { "REG": 4, "PRM": 3, "DTL": 3 },
+    "logistics": { "rail": 3, "depot": 1 },
+    "usedLogistics": { "rail": 0, "depot": 0 }
+  },
+  "turnState": {
+    "rolled": false,
+    "promptDismissed": false,
+    "commercialActionUsed": false,
+    "cellActionUsed": false,
+    "proleumPlayed": false,
+    "negotiationUsed": false
+  },
+  "assetOwnership": {
+    "cell-12": {
+      "id": "asset-xxxx",
+      "cellId": "cell-12",
+      "title": "Нефтебаза Восток",
+      "type": "depot",
+      "cost": 12,
+      "ownerId": "player-xxxx",
+      "ownerName": "Игрок"
+    }
+  },
+  "players": [],
+  "log": []
+}
+```
+
+## JSON-состояние игрока
+
+```json
+{
+  "id": "player-xxxx",
+  "name": "Игрок",
+  "color": "#1f7a5a",
+  "position": 0,
+  "lap": 0,
+  "assetPurchasedLap": -1,
+  "money": 25,
+  "reputation": 3,
+  "efficiency": 3,
+  "influence": 3,
+  "warehouse": { "REG": 0, "PRM": 0, "DTL": 0 },
+  "activeContracts": [],
+  "completedContracts": [],
+  "failedContracts": [],
+  "assets": [],
+  "proleumCards": []
+}
+```
+
+## Следующая нормализация
+
+Когда правила стабилизируются, лучше перейти на гибрид:
+
+- `rooms`: метаданные комнаты;
+- `room_players`: участники, роль, цвет, порядок хода;
+- `room_snapshots`: периодические JSON-снимки для восстановления;
+- `room_events`: append-only журнал действий;
+- `cards`: редактируемые карточки админки;
+- `board_cells`: редактируемые клетки поля;
+- `room_assets`: владение активами в комнате;
+- `room_contracts`: экземпляры контрактов и их статус.
+
+Для тестирования карточек быстрее оставить JSON-состояние комнаты и append-only события. Для конкурентного мультиплеера надежнее будет серверный endpoint `POST /api/action`, который принимает действие, валидирует его на сервере и атомарно пишет новое состояние.
+
