@@ -2599,3 +2599,609 @@ body:has(.gameShell) {
     width: min(100%, 760px);
   }
 }
+
+/* PROLEUM production cleanup: single-screen trading table */
+.gameApp > .workspace > .topbar {
+  display: none;
+}
+
+.app.gameApp,
+.gameApp .workspace,
+body:has(.gameShell) {
+  overflow: hidden;
+}
+
+.gameShell {
+  grid-template-rows: 58px minmax(0, 1fr);
+  grid-template-columns: minmax(710px, 1fr) 382px;
+  gap: 12px;
+  padding: 10px 14px 54px;
+  background:
+    radial-gradient(circle at 8% 24%, rgba(0, 224, 90, 0.1), transparent 16%),
+    radial-gradient(circle at 80% 3%, rgba(255, 204, 0, 0.1), transparent 18%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    #060606;
+  background-size: auto, auto, 28px 28px, 28px 28px, auto;
+}
+
+.topBar {
+  overflow: hidden;
+  min-height: 58px;
+  border-color: rgba(255, 204, 0, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(0, 224, 90, 0.14), transparent 22%),
+    linear-gradient(135deg, rgba(255, 204, 0, 0.16), transparent 48%),
+    #0b0b09;
+}
+
+.topBarMain {
+  grid-template-columns: 150px 78px minmax(180px, 1fr) auto auto auto;
+  gap: 9px;
+  height: 54px;
+  padding: 5px 10px 7px;
+}
+
+.topBar .proleumLogo {
+  gap: 10px;
+}
+
+.topBar .proleumLogo strong {
+  font-size: 15px;
+}
+
+.topBar .dotGrid {
+  grid-template-columns: repeat(3, 6px);
+  gap: 4px;
+}
+
+.topBar .dotGrid i {
+  width: 6px;
+  height: 6px;
+}
+
+.turnTimer {
+  height: 3px;
+}
+
+.dayBadge {
+  min-width: 70px;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+.dayBadge strong {
+  font-size: 20px;
+}
+
+.topBar .turnIdentity h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.topBar .turnIdentity p,
+.topBar .kicker {
+  font-size: 11px;
+}
+
+.turnChecklist {
+  flex-wrap: nowrap;
+}
+
+.turnChecklist span {
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
+.diceConsole {
+  padding: 4px;
+  background: transparent;
+}
+
+.dicePair span {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+
+.turnActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.topCta {
+  min-width: 142px;
+  min-height: 36px;
+  padding-inline: 13px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.topBar .iconButton {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.gameShell .boardPanel {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  overflow: visible;
+}
+
+.gameShell .board {
+  width: min(calc(100vh - 132px), calc(100vw - 448px));
+  max-width: 100%;
+  max-height: calc(100vh - 124px);
+  padding: 8px;
+  border: 1px solid rgba(255, 204, 0, 0.24);
+  border-radius: 8px;
+  background: #f7f5ee;
+}
+
+.boardCell {
+  gap: 2px;
+  padding: 5px;
+}
+
+.boardCell strong {
+  font-size: clamp(9px, 0.68vw, 11px);
+  line-height: 1.04;
+}
+
+.boardCell span {
+  font-size: 9px;
+}
+
+.boardCenter {
+  inset: 16.8%;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  padding: 18px;
+  text-align: left;
+  border-color: rgba(255, 204, 0, 0.2);
+  background:
+    radial-gradient(circle at 12% 16%, rgba(0, 224, 90, 0.18), transparent 20%),
+    radial-gradient(circle at 90% 72%, rgba(255, 204, 0, 0.16), transparent 18%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    #080807;
+  background-size: auto, auto, 26px 26px, 26px 26px, auto;
+}
+
+.boardLogo {
+  align-items: center;
+  padding-bottom: 10px;
+}
+
+.boardLogo > span {
+  color: #ffcc00;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.centerMarket.boardSummary {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 10px;
+  min-height: 0;
+}
+
+.centerResourceBoard,
+.centerDayBoard {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.centerResourceBoard {
+  grid-template-rows: auto 1fr;
+}
+
+.centerResourceBoard header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.centerResourceBoard header span,
+.centerResourceBoard header strong {
+  color: #ffcc00;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.centerResourceBoard header strong {
+  color: #d8d0c0;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.centerTickerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.centerTicker {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 4px;
+  min-height: 118px;
+  padding: 10px;
+  color: #f8f6ef;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent),
+    #11110f;
+  border: 1px solid #29251b;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.centerTicker .tickerCode {
+  color: #ffffff;
+  font-size: clamp(24px, 2.1vw, 38px);
+  line-height: 0.9;
+}
+
+.centerTicker strong {
+  color: #f8f6ef;
+  font-size: 16px;
+}
+
+.centerTicker span:not(.tickerCode),
+.centerTicker b {
+  color: #a99f87;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.centerTicker b {
+  align-self: end;
+  color: #ffcc00;
+}
+
+.centerTicker em {
+  justify-self: start;
+  min-width: 36px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.centerTicker.priceUp {
+  border-color: rgba(255, 77, 77, 0.45);
+}
+
+.centerTicker.priceUp em,
+.centerTicker.priceUp strong {
+  color: #ff4d4d;
+}
+
+.centerTicker.priceDown {
+  border-color: rgba(0, 224, 90, 0.45);
+}
+
+.centerTicker.priceDown em,
+.centerTicker.priceDown strong {
+  color: #00e05a;
+}
+
+.centerDayBoard {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.marketDayCard {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+  color: #f8f6ef;
+  background:
+    linear-gradient(145deg, rgba(255, 204, 0, 0.12), transparent 48%),
+    #13120f;
+  border: 1px solid #332b15;
+  text-align: left;
+}
+
+.marketDayCard span {
+  color: #a99f87;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.marketDayCard strong {
+  color: #ffcc00;
+  font-size: clamp(15px, 1.1vw, 20px);
+  line-height: 1.08;
+}
+
+.marketDayCard small {
+  color: #d8d0c0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.centerLogistics {
+  display: grid;
+  gap: 8px;
+}
+
+.centerLogistics .logisticMeter {
+  padding: 9px 10px;
+  border-radius: 8px;
+}
+
+.centerLogistics .logisticMeter span,
+.centerLogistics .logisticMeter strong {
+  color: #f8f6ef;
+}
+
+.marketTerminal {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(78, 163, 255, 0.08), transparent 30%),
+    #090a0a;
+}
+
+.terminalHeader .ghostButton {
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.terminalDeck {
+  min-height: 0;
+}
+
+.terminalDeck h3 {
+  color: #ffffff;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.terminalScroll {
+  display: grid;
+  gap: 7px;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.marketTerminal .entityCard {
+  min-height: 72px;
+  max-height: 82px;
+  padding: 8px 10px;
+  gap: 4px;
+  border-radius: 8px;
+}
+
+.marketTerminal .entityCard > div:first-child {
+  display: grid;
+  gap: 1px;
+}
+
+.marketTerminal .entityCard p,
+.marketTerminal .entityCard small:not(.lockReason) {
+  display: none;
+}
+
+.marketTerminal .entityCard strong {
+  font-size: 13px;
+  line-height: 1.08;
+}
+
+.marketTerminal .dealMetaLine,
+.marketTerminal .resourceLine,
+.marketTerminal .routeLine {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.marketTerminal .dealMetaLine span,
+.marketTerminal .resourceLine span,
+.marketTerminal .routeLine span {
+  white-space: nowrap;
+}
+
+.marketTerminal .cardAction {
+  justify-self: start;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.tenderDeck .entityCard {
+  min-height: 92px;
+  max-height: 108px;
+}
+
+.playerRail {
+  top: 104px;
+  transform: translateX(calc(-100% + 44px));
+}
+
+.railHandle {
+  padding: 13px 9px;
+  border-radius: 0 7px 7px 0;
+}
+
+.railStack {
+  width: 340px;
+  padding: 10px;
+  gap: 7px;
+}
+
+.railPlayer {
+  gap: 7px;
+  padding: 9px;
+  border-radius: 8px;
+}
+
+.railPlayer header strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.railMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.railPlayer .railMetrics span {
+  display: grid;
+  gap: 2px;
+  min-height: 40px;
+  padding: 5px 4px;
+  color: #f8f6ef;
+  background: #211e17;
+  border-radius: 5px;
+  font-size: inherit;
+  font-weight: 800;
+  text-align: center;
+}
+
+.railPlayer .railMetrics small {
+  overflow: hidden;
+  color: #a99f87;
+  font-size: 8px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.railPlayer .railMetrics b {
+  color: #f8f6ef;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.gameShell .playerDock {
+  left: 48px;
+  right: 18px;
+  transform: translateY(calc(100% - 44px));
+}
+
+.gameShell .playerDock:hover,
+.gameShell .playerDock:focus-within {
+  transform: translateY(0);
+}
+
+.gameShell .dockHandle {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 8px 8px 0 0;
+}
+
+.dockHandle strong {
+  font-size: 14px;
+}
+
+.dockHandle span {
+  font-size: 12px;
+}
+
+.gameShell .tabletStack {
+  max-height: min(32vh, 300px);
+  padding: 9px 10px;
+  background:
+    linear-gradient(90deg, rgba(255, 204, 0, 0.08), transparent 42%),
+    #0a0a09;
+}
+
+.gameShell .playerTablet {
+  grid-template-columns: 1fr 0.46fr 0.8fr;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.gameShell .tabletStats {
+  gap: 5px;
+}
+
+.gameShell .tabletStats span {
+  padding: 4px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.gameShell .tabletZone h4 {
+  font-size: 10px;
+}
+
+.gameShell .dealSlots,
+.gameShell .proleumSlots,
+.gameShell .assetSlots {
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 6px;
+}
+
+.gameShell .warehouseSlots {
+  grid-template-columns: repeat(3, 64px);
+}
+
+.gameShell .cardM,
+.gameShell .dealSlot,
+.gameShell .proleumSlot,
+.gameShell .assetSlot {
+  min-height: 92px;
+  max-height: 104px;
+}
+
+.gameShell .warehouseSlot,
+.gameShell .cardS {
+  width: 64px;
+  height: 72px;
+  min-height: 72px;
+}
+
+.gameShell .cardSlot {
+  padding: 7px;
+  border-radius: 8px;
+}
+
+.gameShell .miniDealCard header strong {
+  font-size: 12px;
+}
+
+.gameShell .miniDealMeta span,
+.gameShell .resourceLine span,
+.gameShell .cardSlot small {
+  font-size: 10px;
+}
+
+@media (max-width: 1280px) {
+  .gameShell {
+    grid-template-columns: minmax(620px, 1fr) 340px;
+  }
+
+  .gameShell .board {
+    width: min(calc(100vh - 132px), calc(100vw - 404px));
+  }
+
+  .turnChecklist {
+    display: none;
+  }
+}

@@ -605,7 +605,7 @@ function topBarMarkup(room, selected) {
       ${proleumLogo}
       <div class="dayBadge"><span>Торговый день</span><strong>${room.day}</strong></div>
       <div class="turnIdentity">
-        <span class="kicker">Ходит</span>
+        <span class="kicker">Текущий ход</span>
         <h2>${escapeHtml(actingPlayer?.name || "Нет игроков")}</h2>
         <p>${escapeHtml(phase.hint)}</p>
       </div>
@@ -622,7 +622,6 @@ function topBarMarkup(room, selected) {
         <button class="primaryButton topCta" data-action="${phase.action || "noop"}" data-cell-id="${phase.cellId || ""}" ${disabled}>${escapeHtml(phase.cta)}</button>
         <button class="secondaryButton iconButton" data-side-panel="log">Лог</button>
         <button class="secondaryButton iconButton" data-view="rules">Правила</button>
-        ${user.role === "admin" ? `<button class="secondaryButton iconButton" data-side-panel="dev">Dev panel</button>` : ""}
       </div>
     </div>
   </header>`;
@@ -632,8 +631,8 @@ function boardMarkup(room) {
   normalizeMarket(room);
   const market = room.market;
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
-  const myTurn = canUserAct(room);
   const player = currentPlayer(room);
+  const resourceReason = userPlayer(room) ? actionGate(room, userPlayer(room), { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Вы не в комнате.";
   return `
     <div class="board">
       ${state.config.boardCells
@@ -653,49 +652,45 @@ function boardMarkup(room) {
       <div class="boardCenter">
         <div class="boardLogo">${proleumLogo}<span>торговый день ${room.day}</span></div>
         <div class="centerMarket boardSummary">
-          <button class="marketEvent gameCard cardM marketDayCard" data-open-card="marketCard:${marketCard.id}">
-            <span>Карта рынка</span>
-            <strong>${escapeHtml(marketCard.title)}</strong>
-            <small>${escapeHtml(marketCard.effect || marketCard.description)}</small>
-          </button>
-          <div class="logisticsGrid compact"><div>ЖД <strong>${Math.max(0, market.logistics.rail - market.usedLogistics.rail)}/${market.logistics.rail}</strong></div><div>Нефтебаза <strong>${Math.max(0, market.logistics.depot - market.usedLogistics.depot)}/${market.logistics.depot}</strong></div></div>
+          <section class="centerResourceBoard">
+            <header><span>Рынок ресурсов</span><strong>Цена / остаток</strong></header>
+            <div class="centerTickerGrid">
+              ${Object.entries(resourceMeta).map(([code, meta]) => resourceTickerMarkup(code, meta, market, resourceReason, "centerTicker")).join("")}
+            </div>
+          </section>
+          <section class="centerDayBoard">
+            <button class="marketEvent marketDayCard" data-open-card="marketCard:${marketCard.id}">
+              <span>Карта рынка</span>
+              <strong>${escapeHtml(marketCard.title)}</strong>
+              <small>${escapeHtml(marketCard.effect || marketCard.description)}</small>
+            </button>
+            <div class="centerLogistics">
+              ${logisticMeter("ЖД", market.logistics.rail, market.usedLogistics.rail)}
+              ${logisticMeter("Нефтебаза", market.logistics.depot, market.usedLogistics.depot)}
+            </div>
+          </section>
         </div>
       </div>
     </div>`;
 }
 
+function resourceTickerMarkup(code, meta, market, resourceReason, className = "tickerRow") {
+  const price = market.prices[code];
+  const delta = price - meta.basePrice;
+  return `<button class="${className} ${delta > 0 ? "priceUp" : delta < 0 ? "priceDown" : "priceFlat"}" data-buy-resource="${code}" ${resourceReason ? "disabled" : ""} title="${escapeHtml(resourceReason || `Купить ${code}`)}">
+    <span class="tickerCode">${code}</span>
+    <strong>${price} млн</strong>
+    <span>${market.stock[code]} шт</span>
+    <em>${delta > 0 ? "↑" : delta < 0 ? "↓" : "•"}${delta ? Math.abs(delta) : "0"}</em>
+    <b>Купить</b>
+  </button>`;
+}
+
 function marketTerminalMarkup(room, openContracts, openTenders, contractReason, tenderReason) {
   normalizeMarket(room);
-  const market = room.market;
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
-  const resourceReason = userPlayer(room) ? actionGate(room, userPlayer(room), { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Вы не в комнате.";
   return `<aside class="marketPanel marketTerminal">
-    <header class="terminalHeader"><div><span>Market Terminal</span><strong>PROLEUM Index</strong></div><button class="ghostButton" data-open-card="marketCard:${marketCard.id}">Карта дня</button></header>
-    <button class="terminalDayCard" data-open-card="marketCard:${marketCard.id}">
-      <span>${escapeHtml(marketCard.title)}</span>
-      <strong>${escapeHtml(marketCard.effect || marketCard.description)}</strong>
-    </button>
-    <section class="tickerPanel">
-      <h3>Ресурсы</h3>
-      ${Object.entries(resourceMeta)
-        .map(([code, meta]) => {
-          const price = market.prices[code];
-          const delta = price - meta.basePrice;
-          return `<button class="tickerRow ${delta > 0 ? "priceUp" : delta < 0 ? "priceDown" : "priceFlat"}" data-buy-resource="${code}" ${resourceReason ? "disabled" : ""} title="${escapeHtml(resourceReason || `Купить ${code}`)}">
-            <span class="tickerCode">${code}</span>
-            <strong>${price} млн</strong>
-            <span>${market.stock[code]} шт</span>
-            <em>${delta > 0 ? "▲" : delta < 0 ? "▼" : "•"}${delta ? Math.abs(delta) : "0"}</em>
-            <b>Купить</b>
-          </button>`;
-        })
-        .join("")}
-    </section>
-    <section class="terminalLogistics">
-      <h3>Логистика</h3>
-      ${logisticMeter("ЖД", market.logistics.rail, market.usedLogistics.rail)}
-      ${logisticMeter("Нефтебаза", market.logistics.depot, market.usedLogistics.depot)}
-    </section>
+    <header class="terminalHeader"><div><span>Сделки рынка</span><strong>Контракты и тендер</strong></div><button class="ghostButton" data-open-card="marketCard:${marketCard.id}">Карта дня</button></header>
     <section class="terminalDeck"><h3>Открытые контракты</h3><div class="terminalScroll">${state.config.contracts
       .slice(0, openContracts)
       .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять", disabled: Boolean(contractReason), reason: contractReason, source: "market" }))
@@ -742,7 +737,13 @@ function playerRailMarkup(room) {
         .map(
           (player) => `<button class="railPlayer ${currentPlayer(room)?.id === player.id ? "current" : ""}" data-open-opponent="${player.id}">
             <header><i style="background:${player.color}"></i><strong>${escapeHtml(player.name)}</strong><span>${currentPlayer(room)?.id === player.id ? "ходит" : "ожидает"}</span></header>
-            <div><span>${player.money} млн</span><span>Р${player.reputation}</span><span>Э${player.efficiency}</span><span>В${player.influence}</span><span>${scorePlayer(player)} VP</span></div>
+            <div class="railMetrics">
+              <span><small>Капитал</small><b>${player.money} млн</b></span>
+              <span><small>Репутация</small><b>${player.reputation}</b></span>
+              <span><small>Эффективность</small><b>${player.efficiency}</b></span>
+              <span><small>Влияние</small><b>${player.influence}</b></span>
+              <span><small>Очки</small><b>${scorePlayer(player)}</b></span>
+            </div>
           </button>`,
         )
         .join("")}
@@ -754,7 +755,7 @@ function playerDockMarkup(room) {
   const mine = userPlayer(room);
   if (!mine) return "";
   return `<aside class="playerDock">
-    <div class="dockHandle"><strong>Моя компания · ${escapeHtml(mine.name)}</strong><span>${mine.money} млн · Р${mine.reputation} · Э${mine.efficiency} · В${mine.influence} · ${scorePlayer(mine)} очк.</span></div>
+    <div class="dockHandle"><strong>Моя компания · ${escapeHtml(mine.name)}</strong><span>Капитал ${mine.money} млн · Репутация ${mine.reputation} · Эффективность ${mine.efficiency} · Влияние ${mine.influence} · Очки ${scorePlayer(mine)}</span></div>
     <div class="tabletStack">
       ${playerTabletMarkup(room, mine, currentPlayer(room)?.id === mine.id)}
     </div>
