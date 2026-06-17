@@ -28,6 +28,7 @@ let lastSyncedState = "";
 let modalState = null;
 let diceState = null;
 let sidePanel = null;
+let dockOpen = false;
 
 normalizeState(state);
 applyStartupRoute();
@@ -754,8 +755,12 @@ function playerRailMarkup(room) {
 function playerDockMarkup(room) {
   const mine = userPlayer(room);
   if (!mine) return "";
-  return `<aside class="playerDock">
-    <div class="dockHandle"><strong>Моя компания · ${escapeHtml(mine.name)}</strong><span>Капитал ${mine.money} млн · Репутация ${mine.reputation} · Эффективность ${mine.efficiency} · Влияние ${mine.influence} · Очки ${scorePlayer(mine)}</span></div>
+  return `<aside class="playerDock ${dockOpen ? "open" : ""}">
+    <button class="dockHandle" data-action="toggle-tablet">
+      <strong>Моя компания · ${escapeHtml(mine.name)}</strong>
+      <span>Капитал ${mine.money} млн · Репутация ${mine.reputation} · Эффективность ${mine.efficiency} · Влияние ${mine.influence} · Очки ${scorePlayer(mine)}</span>
+      <em>${dockOpen ? "Свернуть" : "Планшет"}</em>
+    </button>
     <div class="tabletStack">
       ${playerTabletMarkup(room, mine, currentPlayer(room)?.id === mine.id)}
     </div>
@@ -800,11 +805,11 @@ function playerTabletMarkup(room, player, isCurrent) {
       <span>Влияние <strong>${player.influence}</strong></span>
       <span>Очки <strong>${scorePlayer(player)}</strong></span>
     </div>
-    <section class="tabletZone wide"><h4>Активные сделки</h4><div class="slotGrid dealSlots">${contractSlots}</div></section>
+    <section class="tabletZone"><h4>Активные сделки</h4><div class="slotGrid dealSlots">${contractSlots}</div></section>
     <section class="tabletZone"><h4>Склад ${warehouseUsed(player)}/${warehouseCapacity(player)}</h4><div class="slotGrid warehouseSlots">${warehouseSlots}</div></section>
     <section class="tabletZone"><h4>Карты ПРОЛЕУМ</h4><div class="slotGrid proleumSlots">${proleumSlots}</div></section>
     ${hedgeSlots}
-    <section class="tabletZone wide"><h4>Активы и история</h4><div class="slotGrid assetSlots">${assetSlots}</div><div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div></section>
+    <section class="tabletZone"><h4>Активы</h4><div class="slotGrid assetSlots">${assetSlots}</div><div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div></section>
   </article>`;
 }
 
@@ -1257,6 +1262,10 @@ function bindCommon() {
     modalState = { type: "commercial" };
     render();
   });
+  document.querySelector("[data-action='toggle-tablet']")?.addEventListener("click", () => {
+    dockOpen = !dockOpen;
+    render();
+  });
   document.querySelector("[data-action='dismiss-turn-prompt']")?.addEventListener("click", dismissTurnPrompt);
   document.querySelector("[data-action='next-day']")?.addEventListener("click", nextDay);
   document.querySelectorAll("[data-side-panel]").forEach((button) =>
@@ -1313,7 +1322,7 @@ function bindCommon() {
   document.querySelectorAll("[data-action='resolve-event']").forEach((button) => button.addEventListener("click", () => resolveEventChoice(button.dataset.choice)));
   document.querySelectorAll("[data-action='close-modal']").forEach((item) =>
     item.addEventListener("click", (event) => {
-      if (event.target.closest("[data-modal-body]") && !event.target.matches(".modalClose")) return;
+      if (event.target.closest("[data-modal-body]") && !event.target.closest("[data-action='close-modal']")) return;
       modalState = null;
       render();
     }),
