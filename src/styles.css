@@ -2318,3 +2318,284 @@ textarea:focus {
   .marketTerminal { grid-template-rows: auto; }
   .playerTablet { grid-template-columns: 1fr; }
 }
+
+/* PROLEUM compact viewport pass */
+body:has(.gameShell) {
+  overflow: hidden;
+  background: var(--bg-main);
+}
+
+.app.gameApp,
+.gameApp .workspace {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.gameApp .workspace {
+  padding: 0;
+  background: var(--bg-main);
+}
+
+.gameShell {
+  grid-template-rows: 72px minmax(0, 1fr);
+  grid-template-columns: minmax(620px, 1fr) minmax(360px, 420px);
+  grid-template-areas: "topbar topbar" "board market";
+  height: 100vh;
+  max-height: 100vh;
+  padding: 12px 14px 72px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.topBarMain {
+  grid-template-columns: 170px 82px minmax(220px, 1fr) auto auto;
+  gap: 10px;
+}
+
+.topBar .turnChecklist {
+  margin-top: 0;
+}
+
+.topBar .turnIdentity h2 {
+  font-size: 20px;
+}
+
+.topBar .turnIdentity p {
+  max-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gameShell .boardPanel {
+  overflow: hidden;
+}
+
+.gameShell .board {
+  width: min(calc(100vh - 168px), calc(100vw - 490px));
+  max-width: 100%;
+  max-height: calc(100vh - 158px);
+}
+
+.boardCenter {
+  inset: 16%;
+  padding: 18px;
+}
+
+.boardCenter .boardLogo {
+  padding-bottom: 10px;
+}
+
+.boardSummary .marketDayCard {
+  width: auto;
+  min-height: 112px;
+}
+
+.marketTerminal {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  gap: 9px;
+  padding: 12px;
+}
+
+.terminalDayCard {
+  min-height: 74px;
+  padding: 10px 12px;
+}
+
+.tickerRow {
+  min-height: 36px;
+  grid-template-columns: 50px 68px 42px 38px 54px;
+  padding: 6px 9px;
+}
+
+.logisticMeter {
+  padding: 7px 9px;
+}
+
+.terminalScroll {
+  max-height: none;
+  overflow: hidden;
+  gap: 7px;
+}
+
+.marketTerminal .entityCard {
+  width: 100%;
+  min-height: 88px;
+  max-height: 104px;
+  gap: 5px;
+  padding: 9px 10px;
+}
+
+.marketTerminal .entityCard p,
+.marketTerminal .entityCard small:not(.lockReason) {
+  display: none;
+}
+
+.marketTerminal .entityCard strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketTerminal .dealMetaLine span,
+.marketTerminal .resourceLine span,
+.marketTerminal .routeLine span {
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.marketTerminal .cardAction {
+  min-height: 26px;
+  padding: 5px 8px;
+}
+
+.gameShell .playerDock {
+  position: fixed;
+  left: 50px;
+  right: 28px;
+  bottom: 0;
+  z-index: 18;
+  width: auto;
+  transform: translateY(calc(100% - 52px));
+  transition: transform 0.26s cubic-bezier(.2, .8, .2, 1);
+}
+
+.gameShell .playerDock:hover,
+.gameShell .playerDock:focus-within {
+  transform: translateY(0);
+}
+
+.gameShell .dockHandle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 10px 10px 0 0;
+  cursor: default;
+}
+
+.dockHandle strong,
+.dockHandle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dockHandle span {
+  color: #17140b;
+  font-size: 13px;
+}
+
+.gameShell .tabletStack {
+  max-height: min(42vh, 390px);
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 0 10px 0 0;
+}
+
+.gameShell .playerTablet {
+  grid-template-columns: 1.1fr 0.52fr 0.82fr;
+  gap: 9px;
+  padding: 12px;
+}
+
+.gameShell .tabletHeader,
+.gameShell .tabletStats {
+  grid-column: 1 / -1;
+}
+
+.gameShell .tabletStats span {
+  padding: 5px 7px;
+  font-size: 11px;
+}
+
+.gameShell .tabletZone {
+  min-width: 0;
+}
+
+.gameShell .tabletZone h4 {
+  font-size: 11px;
+}
+
+.gameShell .dealSlots,
+.gameShell .proleumSlots,
+.gameShell .assetSlots {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 7px;
+}
+
+.gameShell .warehouseSlots {
+  grid-template-columns: repeat(3, 72px);
+  gap: 7px;
+}
+
+.gameShell .cardM,
+.gameShell .dealSlot,
+.gameShell .proleumSlot,
+.gameShell .assetSlot {
+  width: auto;
+  min-height: 112px;
+  max-height: 132px;
+}
+
+.gameShell .warehouseSlot,
+.gameShell .cardS {
+  width: 72px;
+  min-height: 82px;
+  height: 82px;
+}
+
+.gameShell .cardSlot {
+  padding: 8px;
+}
+
+.gameShell .miniDealCard {
+  gap: 5px;
+}
+
+.gameShell .miniDealCard .routeLine {
+  display: none;
+}
+
+.gameShell .miniDealCard header strong {
+  font-size: 13px;
+}
+
+.gameShell .tabletHistory {
+  display: none;
+}
+
+.playerRail {
+  top: 112px;
+}
+
+@media (max-width: 1180px) {
+  body:has(.gameShell) {
+    overflow: auto;
+  }
+
+  .app.gameApp,
+  .gameApp .workspace,
+  .gameShell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .gameShell {
+    grid-template-columns: 1fr;
+    grid-template-areas: "topbar" "board" "market";
+    padding-bottom: 76px;
+  }
+
+  .gameShell .board {
+    width: min(100%, 760px);
+  }
+}

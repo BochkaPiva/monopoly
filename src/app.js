@@ -754,7 +754,7 @@ function playerDockMarkup(room) {
   const mine = userPlayer(room);
   if (!mine) return "";
   return `<aside class="playerDock">
-    <div class="dockHandle">Моя компания · ${escapeHtml(mine.name)}</div>
+    <div class="dockHandle"><strong>Моя компания · ${escapeHtml(mine.name)}</strong><span>${mine.money} млн · Р${mine.reputation} · Э${mine.efficiency} · В${mine.influence} · ${scorePlayer(mine)} очк.</span></div>
     <div class="tabletStack">
       ${playerTabletMarkup(room, mine, currentPlayer(room)?.id === mine.id)}
     </div>
