@@ -782,30 +782,43 @@ function cardSlot(content, label, className = "", cardRef = "") {
 
 function miniContractCard(room, player, contract) {
   const progress = Math.round((resourceTotal(contract.filled) / Math.max(1, resourceTotal(contract.resource))) * 100);
-  const routes = routeOptions(room, contract);
   return `<article class="miniDealCard">
     <header><span>${escapeHtml(contract.type)}</span><strong>${escapeHtml(contract.title)}</strong></header>
-    <div class="miniDealMeta"><span>срок ${contract.duration}</span><span>${contract.income} млн</span><span>${escapeHtml(contract.risk)}</span></div>
+    <div class="miniDealMeta"><span>Срок ${contract.duration}</span><span>Доход ${contract.income} млн</span><span>Риск ${escapeHtml(contract.risk)}</span></div>
     <div class="progressTrack"><i style="width:${progress}%"></i></div>
     <div class="resourceLine">${Object.entries(contract.resource).map(([code, amount]) => `<span>${code} ${contract.filled?.[code] || 0}/${amount}</span>`).join("")}</div>
-    <div class="routeLine">${routes.map((route) => `<span>${escapeHtml(route.title)}</span>`).join("")}</div>
+    <footer><span>Обеспечено ${progress}%</span><b>Открыть</b></footer>
   </article>`;
 }
 
 function playerTabletMarkup(room, player, isCurrent) {
   const activeLimit = state.config?.settings?.activeContractLimit || 2;
-  const contractSlots = Array.from({ length: activeLimit }, (_, index) => cardSlot(player.activeContracts[index] ? miniContractCard(room, player, player.activeContracts[index]) : "", `Контракт ${index + 1}`, "dealSlot cardM", player.activeContracts[index] ? `activeContract:${player.activeContracts[index].instanceId}` : "")).join("");
-  const proleumSlots = Array.from({ length: 3 }, (_, index) => cardSlot(player.proleumCards[index] ? `<strong>${escapeHtml(player.proleumCards[index].title)}</strong><small>${escapeHtml(player.proleumCards[index].effect || player.proleumCards[index].description)}</small>` : "", `ПРОЛЕУМ ${index + 1}`, "proleumSlot cardM", player.proleumCards[index] ? `proleum:${player.proleumCards[index].id}` : "")).join("");
-  const hedgeSlots = (player.hedgeTokens || []).length
-    ? `<section class="tabletZone"><h4>Hedge MOEX</h4><div class="slotGrid proleumSlots">${Array.from({ length: state.config?.settings?.hedgeLimit || 2 }, (_, index) => cardSlot(player.hedgeTokens[index] ? `<strong>${player.hedgeTokens[index].resource}</strong><small>хедж цены x2</small>` : "", `Hedge ${index + 1}`, "hedgeSlot cardM", player.hedgeTokens[index] ? `hedge:${index}` : "")).join("")}</div></section>`
-    : "";
-  const assetSlots = Array.from({ length: Math.max(4, player.assets.length) }, (_, index) => cardSlot(player.assets[index] ? `<strong>${escapeHtml(player.assets[index].title)}</strong><small>${escapeHtml(player.assets[index].type)}</small>` : "", `Актив ${index + 1}`, "assetSlot cardM", player.assets[index] ? `asset:${player.assets[index].id}` : "")).join("");
-  const warehouseSlots = Array.from({ length: warehouseCapacity(player) }, (_, index) => {
-    const expanded = Object.entries(player.warehouse || {}).flatMap(([code, amount]) => Array.from({ length: amount }, () => code));
-    return cardSlot(expanded[index] ? `<strong>${expanded[index]}</strong><small>ресурс</small>` : "", "склад", "warehouseSlot cardS", expanded[index] ? `warehouse:${expanded[index]}` : "");
+  const contractSlots = Array.from({ length: activeLimit }, (_, index) => {
+    const contract = player.activeContracts[index];
+    return contract
+      ? `<button class="tabletDeal" data-open-card="activeContract:${contract.instanceId}">${miniContractCard(room, player, contract)}</button>`
+      : `<div class="tabletEmpty dealEmpty"><span>Свободный слот</span><small>Контракт появится здесь</small></div>`;
   }).join("");
+  const resourceChips = Object.entries(player.warehouse || {})
+    .map(([code, amount]) => `<button class="resourceChip resource-${code.toLowerCase()}" data-open-card="warehouse:${code}" ${amount ? "" : "disabled"}><strong>${code}</strong><span>${amount}</span></button>`)
+    .join("");
+  const proleumSlots = Array.from({ length: 3 }, (_, index) => {
+    const cardItem = player.proleumCards[index];
+    return cardItem
+      ? `<button class="tabletMiniCard proleumMini" data-open-card="proleum:${cardItem.id}"><span>ПРОЛЕУМ</span><strong>${escapeHtml(cardItem.title)}</strong></button>`
+      : `<div class="tabletEmpty miniEmpty"><span>Карта ${index + 1}</span></div>`;
+  }).join("");
+  const assetSlots = player.assets.length
+    ? player.assets.map((item) => `<button class="assetRow" data-open-card="asset:${item.id}"><span>${escapeHtml(item.type)}</span><strong>${escapeHtml(item.title)}</strong></button>`).join("")
+    : `<div class="tabletEmpty assetEmpty"><span>Активов пока нет</span><small>Купленные объекты появятся здесь</small></div>`;
+  const hedgeSlots = (player.hedgeTokens || [])
+    .map((token, index) => `<button class="hedgeChip" data-open-card="hedge:${index}"><span>Hedge</span><strong>${token.resource} x${token.volume || 2}</strong></button>`)
+    .join("");
   return `<article class="playerTablet ${isCurrent ? "current" : ""}">
-    <header class="tabletHeader"><div><i style="background:${player.color}"></i><strong>${escapeHtml(player.name)}</strong></div><span>${isCurrent ? "ходит" : "ожидает"}</span></header>
+    <header class="tabletHeader">
+      <div><i style="background:${player.color}"></i><strong>${escapeHtml(player.name)}</strong></div>
+      <span>${isCurrent ? "Ваш ход" : "Ожидание"}</span>
+    </header>
     <div class="tabletStats">
       <span>Капитал <strong>${player.money} млн</strong></span>
       <span>Репутация <strong>${player.reputation}</strong></span>
@@ -813,11 +826,23 @@ function playerTabletMarkup(room, player, isCurrent) {
       <span>Влияние <strong>${player.influence}</strong></span>
       <span>Очки <strong>${scorePlayer(player)}</strong></span>
     </div>
-    <section class="tabletZone"><h4>Активные сделки</h4><div class="slotGrid dealSlots">${contractSlots}</div></section>
-    <section class="tabletZone"><h4>Склад ${warehouseUsed(player)}/${warehouseCapacity(player)}</h4><div class="slotGrid warehouseSlots">${warehouseSlots}</div></section>
-    <section class="tabletZone"><h4>Карты ПРОЛЕУМ</h4><div class="slotGrid proleumSlots">${proleumSlots}</div></section>
-    ${hedgeSlots}
-    <section class="tabletZone"><h4>Активы</h4><div class="slotGrid assetSlots">${assetSlots}</div><div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div></section>
+    <div class="tabletWorkspace">
+      <section class="tabletZone dealsZone">
+        <header><h4>Активные сделки</h4><span>${player.activeContracts.length}/${activeLimit}</span></header>
+        <div class="dealWorkbench">${contractSlots}</div>
+      </section>
+      <section class="tabletZone inventoryZone">
+        <header><h4>Склад и решения</h4><span>${warehouseUsed(player)}/${warehouseCapacity(player)}</span></header>
+        <div class="resourceShelf">${resourceChips}</div>
+        <div class="proleumShelf">${proleumSlots}</div>
+        ${hedgeSlots ? `<div class="hedgeShelf">${hedgeSlots}</div>` : ""}
+      </section>
+      <section class="tabletZone assetsZone">
+        <header><h4>Активы компании</h4><span>${player.assets.length}</span></header>
+        <div class="assetShelf">${assetSlots}</div>
+        <div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div>
+      </section>
+    </div>
   </article>`;
 }
 
@@ -1295,7 +1320,8 @@ function bindCommon() {
   );
   document.querySelectorAll("[data-open-card]").forEach((item) =>
     item.addEventListener("click", (event) => {
-      if (event.target.closest("button") && event.target !== item && !event.target.matches(".cardSlot, .terminalDayCard, .marketDayCard")) return;
+      const clickedButton = event.target.closest("button");
+      if (clickedButton && clickedButton !== item) return;
       modalState = { type: "card", ref: item.dataset.openCard };
       render();
     }),

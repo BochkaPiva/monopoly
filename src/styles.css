@@ -3799,3 +3799,411 @@ body:has(.gameShell) {
     font-size: 12px;
   }
 }
+
+/* Player tablet rebuild: compact workbench without clipped nested controls */
+.gameShell .playerDock {
+  left: 64px;
+  right: 24px;
+  bottom: 16px;
+  max-width: 1760px;
+  margin-inline: auto;
+}
+
+.gameShell .tabletStack {
+  max-height: none;
+  padding: 8px;
+  overflow: visible;
+  background: #080908;
+  border-color: rgba(255, 204, 0, 0.28);
+  box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.54);
+}
+
+.gameShell .playerTablet {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) 1fr;
+  grid-template-rows: 38px minmax(0, 1fr);
+  gap: 9px 16px;
+  height: 252px;
+  min-height: 252px;
+  padding: 12px 14px 14px;
+  overflow: hidden;
+  color: #f5f3eb;
+  background:
+    linear-gradient(90deg, rgba(0, 224, 90, 0.055), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
+    #0d0e0c;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+}
+
+.gameShell .playerTablet.current {
+  border-color: rgba(255, 204, 0, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.gameShell .tabletHeader {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.gameShell .tabletHeader div {
+  min-width: 0;
+}
+
+.gameShell .tabletHeader strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gameShell .tabletHeader > span {
+  padding: 4px 7px;
+  color: #050505;
+  background: #ffcc00;
+  border-radius: 4px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.gameShell .tabletStats {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gameShell .tabletStats span {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: 30px;
+  padding: 6px 9px;
+  color: #a9a293;
+  background: #181813;
+  border: 1px solid #29271f;
+  border-radius: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.gameShell .tabletStats strong {
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.tabletWorkspace {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(460px, 1.35fr) minmax(360px, 0.95fr) minmax(300px, 0.8fr);
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.gameShell .tabletWorkspace .tabletZone {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 7px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.gameShell .tabletWorkspace .tabletZone > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gameShell .tabletWorkspace .tabletZone h4 {
+  margin: 0;
+  color: #ffcc00;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.gameShell .tabletWorkspace .tabletZone > header > span {
+  color: #a69d89;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.dealWorkbench {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 0;
+}
+
+.tabletDeal {
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  color: #ffffff;
+  background:
+    linear-gradient(145deg, rgba(255, 204, 0, 0.1), transparent 42%),
+    #121310;
+  border: 1px solid rgba(255, 204, 0, 0.42);
+  border-radius: 7px;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.tabletDeal:hover,
+.tabletDeal:focus-visible {
+  background:
+    linear-gradient(145deg, rgba(255, 204, 0, 0.17), transparent 50%),
+    #17170f;
+  border-color: #ffcc00;
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.tabletDeal .miniDealCard {
+  display: grid;
+  grid-template-rows: auto auto 5px auto 1fr;
+  gap: 6px;
+  height: 100%;
+}
+
+.tabletDeal .miniDealCard header {
+  min-width: 0;
+}
+
+.tabletDeal .miniDealCard header strong {
+  overflow: hidden;
+  display: -webkit-box;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.12;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tabletDeal .miniDealMeta {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.tabletDeal .miniDealMeta span {
+  color: #b9b09e;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.tabletDeal .progressTrack {
+  height: 5px;
+  background: #36342c;
+}
+
+.tabletDeal .resourceLine {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.tabletDeal .resourceLine span {
+  padding: 3px 5px;
+  font-size: 9px;
+}
+
+.tabletDeal footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 8px;
+  color: #8e8778;
+  font-size: 9px;
+}
+
+.tabletDeal footer b {
+  color: #ffcc00;
+  font-size: 10px;
+}
+
+.tabletEmpty {
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  color: #716c61;
+  background: #10110f;
+  border: 1px dashed #37362f;
+  border-radius: 7px;
+  text-align: center;
+}
+
+.tabletEmpty span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tabletEmpty small {
+  color: #5e5a52;
+  font-size: 9px;
+}
+
+.inventoryZone {
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+}
+
+.resourceShelf {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.resourceChip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 7px 9px;
+  color: #ffffff;
+  background: #131411;
+  border: 1px solid #34342d;
+  border-radius: 6px;
+}
+
+.resourceChip strong {
+  font-size: 13px;
+}
+
+.resourceChip span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: #080808;
+  background: #ffcc00;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.resourceChip:disabled {
+  opacity: 0.42;
+}
+
+.proleumShelf {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-height: 0;
+}
+
+.tabletMiniCard {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px;
+  color: #ffffff;
+  background:
+    linear-gradient(145deg, rgba(0, 224, 90, 0.1), transparent 50%),
+    #11130f;
+  border: 1px solid rgba(0, 224, 90, 0.35);
+  border-radius: 6px;
+  text-align: left;
+}
+
+.tabletMiniCard span {
+  color: #00e05a;
+  font-size: 8px;
+  font-weight: 950;
+}
+
+.tabletMiniCard strong {
+  overflow: hidden;
+  display: -webkit-box;
+  font-size: 10px;
+  line-height: 1.15;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.hedgeShelf {
+  display: flex;
+  gap: 6px;
+}
+
+.hedgeChip {
+  display: flex;
+  gap: 6px;
+  padding: 5px 7px;
+  color: #ffffff;
+  background: #171513;
+  border: 1px solid #48403a;
+  border-radius: 5px;
+  font-size: 9px;
+}
+
+.assetShelf {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+}
+
+.assetRow {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 9px;
+  color: #ffffff;
+  background: #131310;
+  border: 1px solid #302e27;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.assetRow span {
+  color: #a49c8b;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.assetRow strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gameShell .assetsZone .tabletHistory {
+  display: flex;
+  align-self: end;
+  gap: 5px;
+  margin: 0;
+}
+
+.gameShell .assetsZone .tabletHistory span {
+  padding: 4px 6px;
+  font-size: 9px;
+}
+
+@media (max-width: 1420px) {
+  .tabletWorkspace {
+    grid-template-columns: minmax(400px, 1.25fr) minmax(320px, 1fr) minmax(250px, 0.75fr);
+  }
+
+  .gameShell .playerTablet {
+    height: 244px;
+    min-height: 244px;
+  }
+}
