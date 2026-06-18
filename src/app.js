@@ -935,6 +935,7 @@ function modalMarkup() {
   const room = activeRoom();
   const mine = room ? userPlayer(room) : null;
   if (modalState.type === "card") return expandedCardMarkup(modalState.ref);
+  if (modalState.type === "cardReveal") return cardRevealMarkup(modalState);
   if (modalState.type === "commercial" && mine) {
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet cardSheet" data-modal-body>
@@ -1064,10 +1065,10 @@ function modalMarkup() {
   if (modalState.type === "eventChoice") {
     const eventCard = state.config.events.find((item) => item.id === modalState.eventId) || modalState;
     const choices = eventCard.choices?.length ? eventCard.choices : ["Заплатить и сохранить темп", "Потерять репутацию", "Принять задержку"];
-    return `<div class="modalBackdrop" data-action="close-modal">
-      <section class="modalSheet cellSheet theme-${cellTheme(cell.type)}" data-modal-body>
-        <button class="modalClose" data-action="close-modal">×</button>
-        <span class="kicker">Операционное событие</span>
+    return `<div class="modalBackdrop revealBackdrop">
+      <section class="modalSheet cellSheet theme-event revealCard eventReveal" data-modal-body>
+        <div class="revealGlow"></div>
+        <span class="cardType">Операционное событие</span>
         <h2>${escapeHtml(eventCard.title)}</h2>
         <p>${escapeHtml(eventCard.description)}</p>
         <div class="hintBox">Помогает: ${escapeHtml(eventCard.helps || "карты ПРОЛЕУМ / активы / шкалы компании")}</div>
@@ -1651,10 +1652,17 @@ function takeDeal(kind, id) {
   if (!entity) return;
   const requirement = requirementGate(player, entity.requirement);
   if (requirement) return rejectAction(room, requirement);
-  player.activeContracts.push(cloneDeal(entity));
+  const deal = cloneDeal(entity);
+  player.activeContracts.push(deal);
   markCommercialAction(room);
   room.log.unshift(`${player.name}: взял ${kind === "tenders" ? "тендер" : "контракт"} "${entity.title}".`);
-  modalState = null;
+  modalState = {
+    type: "cardReveal",
+    kind: kind === "tenders" ? "tender" : "contract",
+    label: kind === "tenders" ? "Новый тендер" : "Новый контракт",
+    stamp: "В планшете",
+    card: clone(entity),
+  };
   commit();
 }
 
@@ -1666,6 +1674,33 @@ function requirementGate(player, requirement = "") {
   const needed = Number(match[2]);
   if (key && player[key] < needed) return `Требование допуска: ${requirement}.`;
   return "";
+}
+
+function cardRevealMarkup(reveal) {
+  const card = reveal.card || {};
+  const resources = card.resource
+    ? `<div class="resourceLine expanded">${Object.entries(card.resource).map(([code, amount]) => `<span>${code} x${amount}</span>`).join("")}</div>`
+    : "";
+  const routes = card.routes?.length ? `<div class="routeLine">${card.routes.map((route) => `<span>${escapeHtml(route)}</span>`).join("")}</div>` : "";
+  return `<div class="modalBackdrop revealBackdrop" data-action="close-modal">
+    <section class="modalSheet cardSheet revealCard reveal-${escapeHtml(reveal.kind || "card")}" data-modal-body>
+      <div class="revealGlow"></div>
+      <button class="modalClose" data-action="close-modal">×</button>
+      <span class="cardType">${escapeHtml(reveal.label || card.type || "Новая карта")}</span>
+      <div class="revealStamp">${escapeHtml(reveal.stamp || "Получено")}</div>
+      <h2>${escapeHtml(card.title || "Карта")}</h2>
+      <p>${escapeHtml(card.description || card.effect || "Карта добавлена в вашу игровую зону.")}</p>
+      ${resources}
+      ${routes}
+      <div class="cardFacts">
+        ${card.income ? `<span>Доход <strong>${card.income} млн</strong></span>` : ""}
+        ${card.duration ? `<span>Срок <strong>${card.duration}</strong></span>` : ""}
+        ${card.risk !== undefined ? `<span>Риск <strong>${card.risk}</strong></span>` : ""}
+      </div>
+      ${card.effect ? `<div class="hintBox">${escapeHtml(card.effect)}</div>` : ""}
+      <div class="modalActions"><button class="primaryButton revealAccept" data-action="close-modal">Понятно</button></div>
+    </section>
+  </div>`;
 }
 
 function buyHedge(resource) {
@@ -1697,7 +1732,7 @@ function drawMarketCardFromCell() {
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   markCellAction(room);
   room.log.unshift(`${player.name}: открыл карту рынка "${marketCard.title}".`);
-  modalState = null;
+  modalState = { type: "cardReveal", kind: "market", label: "Карта рынка", stamp: `День ${room.day}`, card: clone(marketCard) };
   commit();
 }
 
@@ -1872,13 +1907,14 @@ function drawProleumCard() {
   const handLimit = state.config.settings?.proleumHandLimit || 3;
   if (player.proleumCards.length >= handLimit) {
     room.log.unshift(`${player.name}: рука ПРОЛЕУМ уже заполнена.`);
+    modalState = null;
   } else {
     const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
     player.proleumCards.push(clone(cardItem));
     markCellAction(room);
     room.log.unshift(`${player.name}: взял карту ПРОЛЕУМ "${cardItem.title}".`);
+    modalState = { type: "cardReveal", kind: "proleum", label: "Карта ПРОЛЕУМ", stamp: "Добавлена в руку", card: clone(cardItem) };
   }
-  modalState = null;
   commit();
 }
 

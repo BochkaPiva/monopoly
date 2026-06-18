@@ -3631,6 +3631,160 @@ body:has(.gameShell) {
   border-style: dashed;
 }
 
+.revealBackdrop {
+  perspective: 1400px;
+  animation: revealBackdropIn 260ms ease-out both;
+}
+
+.revealCard {
+  position: relative;
+  overflow: hidden;
+  transform-origin: 50% 70%;
+  animation: cardReveal 680ms cubic-bezier(.18, .82, .2, 1) both;
+  backface-visibility: hidden;
+}
+
+.revealCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -45%;
+  z-index: 0;
+  width: 34%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: skewX(-18deg);
+  animation: revealSweep 900ms 360ms ease-out both;
+}
+
+.revealCard > *:not(.revealGlow) {
+  position: relative;
+  z-index: 1;
+}
+
+.revealGlow {
+  position: absolute;
+  inset: -40%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 204, 0, 0.2), transparent 54%);
+  opacity: 0;
+  animation: revealGlow 900ms 180ms ease-out both;
+}
+
+.revealStamp {
+  display: inline-flex;
+  justify-self: start;
+  margin: 4px 0 14px;
+  padding: 6px 10px;
+  color: #080808;
+  background: #ffcc00;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  transform: rotate(-1deg);
+  animation: stampIn 360ms 560ms cubic-bezier(.2, 1.35, .35, 1) both;
+}
+
+.revealCard h2,
+.revealCard p,
+.revealCard .hintBox,
+.revealCard .resourceLine,
+.revealCard .routeLine,
+.revealCard .cardFacts,
+.revealCard .decisionGrid,
+.revealCard .modalActions {
+  animation: revealContent 360ms 430ms ease-out both;
+}
+
+.reveal-market {
+  border-color: rgba(78, 163, 255, 0.72);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(78, 163, 255, 0.2), transparent 26%),
+    #10110f;
+}
+
+.reveal-proleum {
+  border-color: rgba(0, 224, 90, 0.7);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(0, 224, 90, 0.2), transparent 26%),
+    #0d110e;
+}
+
+.reveal-tender {
+  border-color: rgba(255, 204, 0, 0.9);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 204, 0, 0.24), transparent 28%),
+    #131109;
+}
+
+.eventReveal .decisionGrid {
+  animation-delay: 600ms;
+}
+
+.revealAccept {
+  min-width: 150px;
+}
+
+@keyframes revealBackdropIn {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: blur(8px); }
+}
+
+@keyframes cardReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(54px) rotateY(84deg) scale(0.78);
+  }
+  58% {
+    opacity: 1;
+    transform: translateY(-8px) rotateY(-5deg) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotateY(0) scale(1);
+  }
+}
+
+@keyframes revealSweep {
+  from { left: -45%; opacity: 0; }
+  35% { opacity: 1; }
+  to { left: 125%; opacity: 0; }
+}
+
+@keyframes revealGlow {
+  0% { opacity: 0; transform: scale(0.7); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+@keyframes stampIn {
+  from { opacity: 0; transform: scale(1.5) rotate(-5deg); }
+  to { opacity: 1; transform: scale(1) rotate(-1deg); }
+}
+
+@keyframes revealContent {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revealBackdrop,
+  .revealCard,
+  .revealCard::before,
+  .revealGlow,
+  .revealStamp,
+  .revealCard h2,
+  .revealCard p,
+  .revealCard .hintBox,
+  .revealCard .resourceLine,
+  .revealCard .routeLine,
+  .revealCard .cardFacts,
+  .revealCard .decisionGrid,
+  .revealCard .modalActions {
+    animation: none;
+  }
+}
+
 .roomActions .dangerButton {
   margin-left: auto;
 }
