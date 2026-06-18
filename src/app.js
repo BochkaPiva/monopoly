@@ -181,6 +181,7 @@ function normalizeState(nextState) {
   nextState.rooms.forEach((room) => {
     room.day ||= 1;
     room.currentTurn ||= 0;
+    room.ownerName ||= room.players?.[0]?.name || "";
     room.marketCardIndex ||= 0;
     room.log ||= [];
     room.players ||= [];
@@ -551,14 +552,18 @@ function roomsMarkup() {
 
 function roomCardMarkup(room) {
   const initials = room.players.map((player) => `<span style="background:${player.color}">${escapeHtml(player.name.slice(0, 1).toUpperCase())}</span>`).join("");
+  const isMember = room.players.some((player) => player.name === user.name);
+  const canDelete = user.role === "admin" || room.ownerName === user.name;
   return `
     <article class="roomCard ${room.id === activeRoomId ? "active" : ""}">
-      <div><h3>${escapeHtml(room.name)}</h3><span>${room.players.length} игроков · день ${room.day}</span></div>
+      <div><h3>${escapeHtml(room.name)}</h3><span>${room.players.length} игроков · день ${room.day}${room.ownerName ? ` · владелец ${escapeHtml(room.ownerName)}` : ""}</span></div>
       <div class="miniPlayers">${initials}</div>
       <div class="roomActions">
         <button class="secondaryButton" data-copy="${room.id}">ID</button>
         <button class="secondaryButton" data-open-room="${room.id}">Открыть</button>
-        <button class="primaryButton" data-join-room="${room.id}">${room.players.some((player) => player.name === user.name) ? "Войти" : "Присоединиться"}</button>
+        <button class="primaryButton" data-join-room="${room.id}">${isMember ? "Войти" : "Присоединиться"}</button>
+        ${isMember ? `<button class="secondaryButton" data-leave-room="${room.id}">Покинуть</button>` : ""}
+        ${canDelete ? `<button class="dangerButton" data-delete-room="${room.id}">Удалить</button>` : ""}
       </div>
     </article>`;
 }
@@ -600,6 +605,7 @@ function topBarMarkup(room, selected) {
   const turnState = normalizeTurnState(room.turnState);
   const phase = turnPhase(room, selected);
   const disabled = phase.action ? "" : "disabled";
+  const canFinishEarly = canUserAct(room) && turnState.rolled && phase.id !== "TURN_END_READY";
   return `<header class="topBar" data-turn="${room.currentTurn}-${room.day}">
     <div class="turnTimer"><i></i></div>
     <div class="topBarMain">
@@ -621,8 +627,10 @@ function topBarMarkup(room, selected) {
       </div>
       <div class="turnActions">
         <button class="primaryButton topCta" data-action="${phase.action || "noop"}" data-cell-id="${phase.cellId || ""}" ${disabled}>${escapeHtml(phase.cta)}</button>
+        ${canFinishEarly ? `<button class="secondaryButton iconButton" data-action="end-turn" title="Завершить ход без обязательного действия">Завершить</button>` : ""}
         <button class="secondaryButton iconButton" data-side-panel="log">Лог</button>
         <button class="secondaryButton iconButton" data-view="rules">Правила</button>
+        <button class="secondaryButton iconButton" data-leave-room="${room.id}">Покинуть</button>
       </div>
     </div>
   </header>`;
@@ -941,6 +949,7 @@ function modalMarkup() {
           ${commercialActionOption(room, mine, { label: "Hedge MOEX", cells: ["hedge"], details: "Фиксация цены ресурса до 2 жетонов", action: "hedge" })}
           ${commercialActionOption(room, mine, { label: "Брокерка", cells: ["broker"], details: "Передать активный контракт в брокерский контур", action: "broker" })}
         </div>
+        <button class="secondaryButton skipAction" data-action="skip-commercial">Пропустить коммерческое действие</button>
       </section>
     </div>`;
   }
@@ -986,6 +995,7 @@ function modalMarkup() {
           ${owner ? `<span>Владелец: ${escapeHtml(owner.ownerName)}</span>` : `<span>Актив свободен</span>`}
         </div>
         ${cellActionMarkup(cell, myTurn)}
+        ${myTurn && standing && !room.turnState?.cellActionUsed ? `<button class="secondaryButton skipAction" data-action="skip-cell">Пропустить действие клетки</button>` : ""}
       </section>
     </div>`;
   }
@@ -1249,6 +1259,12 @@ function bindCommon() {
       render();
     }),
   );
+  document.querySelectorAll("[data-leave-room]").forEach((button) =>
+    button.addEventListener("click", () => leaveRoom(button.dataset.leaveRoom)),
+  );
+  document.querySelectorAll("[data-delete-room]").forEach((button) =>
+    button.addEventListener("click", () => deleteRoom(button.dataset.deleteRoom)),
+  );
   document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", () => navigator.clipboard?.writeText(button.dataset.copy)));
   document.querySelectorAll("[data-action='roll']").forEach((button) => button.addEventListener("click", roll));
   document.querySelector("[data-action='end-turn']")?.addEventListener("click", endTurn);
@@ -1262,6 +1278,8 @@ function bindCommon() {
     modalState = { type: "commercial" };
     render();
   });
+  document.querySelector("[data-action='skip-cell']")?.addEventListener("click", skipCellAction);
+  document.querySelector("[data-action='skip-commercial']")?.addEventListener("click", skipCommercialAction);
   document.querySelector("[data-action='toggle-tablet']")?.addEventListener("click", () => {
     dockOpen = !dockOpen;
     render();
@@ -1343,6 +1361,7 @@ function createRoom(name) {
   const room = {
     id: uid("room"),
     name,
+    ownerName: user.name,
     day: 1,
     currentTurn: 0,
     marketCardIndex: 0,
@@ -1459,6 +1478,80 @@ function joinRoom(roomId) {
   }
 }
 
+function leaveRoom(roomId) {
+  const room = state.rooms.find((item) => item.id === roomId);
+  if (!room) return;
+  const playerIndex = room.players.findIndex((player) => player.name === user.name);
+  if (playerIndex < 0) {
+    activeRoomId = null;
+    view = "rooms";
+    render();
+    return;
+  }
+
+  const leavingPlayer = room.players[playerIndex];
+  const wasCurrent = playerIndex === room.currentTurn;
+  room.players.splice(playerIndex, 1);
+  Object.entries(room.assetOwnership || {}).forEach(([cellId, asset]) => {
+    if (asset.ownerId === leavingPlayer.id) delete room.assetOwnership[cellId];
+  });
+
+  if (!room.players.length) {
+    state.rooms = state.rooms.filter((item) => item.id !== roomId);
+  } else {
+    if (playerIndex < room.currentTurn) room.currentTurn -= 1;
+    if (room.currentTurn >= room.players.length) room.currentTurn = 0;
+    if (wasCurrent) room.turnState = normalizeTurnState();
+    if (room.ownerName === leavingPlayer.name) room.ownerName = room.players[0].name;
+    room.log.unshift(`${leavingPlayer.name} покинул комнату${wasCurrent ? "; ход передан следующему игроку" : ""}.`);
+  }
+
+  activeRoomId = null;
+  view = "rooms";
+  modalState = null;
+  sidePanel = null;
+  window.location.hash = "";
+  commit();
+}
+
+function deleteRoom(roomId) {
+  const room = state.rooms.find((item) => item.id === roomId);
+  if (!room) return;
+  if (user.role !== "admin" && room.ownerName !== user.name) return;
+  if (!window.confirm(`Удалить партию «${room.name}»? Это действие нельзя отменить.`)) return;
+  state.rooms = state.rooms.filter((item) => item.id !== roomId);
+  if (activeRoomId === roomId) activeRoomId = null;
+  view = "rooms";
+  modalState = null;
+  sidePanel = null;
+  window.location.hash = "";
+  commit();
+}
+
+function skipCellAction() {
+  const room = activeRoom();
+  if (!room || !canUserAct(room) || !room.turnState?.rolled) return;
+  const player = currentPlayer(room);
+  room.turnState = normalizeTurnState(room.turnState);
+  room.turnState.cellActionUsed = true;
+  room.turnState.promptDismissed = true;
+  room.log.unshift(`${player.name}: пропустил действие клетки.`);
+  modalState = null;
+  commit();
+}
+
+function skipCommercialAction() {
+  const room = activeRoom();
+  if (!room || !canUserAct(room) || !room.turnState?.rolled) return;
+  const player = currentPlayer(room);
+  room.turnState = normalizeTurnState(room.turnState);
+  room.turnState.commercialActionUsed = true;
+  room.turnState.promptDismissed = true;
+  room.log.unshift(`${player.name}: пропустил коммерческое действие.`);
+  modalState = null;
+  commit();
+}
+
 function roll() {
   const room = activeRoom();
   if (!room || !room.players.length) return;
@@ -1494,7 +1587,7 @@ function roll() {
 
 function endTurn() {
   const room = activeRoom();
-  if (!room || !canUserAct(room)) return;
+  if (!room || !canUserAct(room) || !room.turnState?.rolled) return;
   const player = currentPlayer(room);
   ageContracts(room, player);
   room.log.unshift(`${player.name}: завершил ход.`);
