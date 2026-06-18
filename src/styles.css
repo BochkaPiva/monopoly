@@ -3725,6 +3725,64 @@ body:has(.gameShell) {
   min-width: 150px;
 }
 
+.contractStageResult {
+  border-color: rgba(78, 163, 255, 0.72);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(78, 163, 255, 0.18), transparent 28%),
+    #10110f;
+}
+
+.settlementGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.settlementGrid span {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  color: #a99f87;
+  background: #181813;
+  border: 1px solid #302d22;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.settlementGrid strong {
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.deliveryResult.riskPassed {
+  border-color: rgba(0, 224, 90, 0.72);
+}
+
+.deliveryResult.riskTriggered {
+  border-color: rgba(255, 77, 77, 0.82);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 77, 77, 0.18), transparent 28%),
+    #120e0d;
+}
+
+.riskNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 15px;
+  color: #fff4f4;
+  background: rgba(255, 77, 77, 0.12);
+  border: 1px solid rgba(255, 77, 77, 0.5);
+  border-radius: 7px;
+}
+
+.riskNotice span {
+  color: #ff8d8d;
+  font-weight: 900;
+}
+
 @keyframes revealBackdropIn {
   from { opacity: 0; backdrop-filter: blur(0); }
   to { opacity: 1; backdrop-filter: blur(8px); }

@@ -29,6 +29,9 @@ let modalState = null;
 let diceState = null;
 let sidePanel = null;
 let dockOpen = false;
+let pushInFlight = false;
+let pushQueued = false;
+let localMutationUntil = 0;
 
 normalizeState(state);
 applyStartupRoute();
@@ -88,12 +91,16 @@ function loadUser() {
 }
 
 function commit() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const serialized = JSON.stringify(state);
+  localStorage.setItem(STORAGE_KEY, serialized);
+  lastSyncedState = serialized;
+  localMutationUntil = Date.now() + 5000;
   pushToServer();
   render();
 }
 
 async function syncFromServer() {
+  if (pushInFlight || Date.now() < localMutationUntil) return;
   try {
     const response = await fetch("./api/state", { cache: "no-store" });
     if (!response.ok) return;
@@ -106,9 +113,10 @@ async function syncFromServer() {
       await pushToServer();
       return;
     }
+    normalizeState(remote);
     const serialized = JSON.stringify(remote);
-    if (serialized && serialized !== lastSyncedState && serialized !== JSON.stringify(state)) {
-      normalizeState(remote);
+    const localSerialized = JSON.stringify(state);
+    if (serialized && serialized !== lastSyncedState && serialized !== localSerialized) {
       state = remote;
       localStorage.setItem(STORAGE_KEY, serialized);
       lastSyncedState = serialized;
@@ -121,16 +129,28 @@ async function syncFromServer() {
 }
 
 async function pushToServer() {
+  if (pushInFlight) {
+    pushQueued = true;
+    return;
+  }
+  pushInFlight = true;
   try {
     const serialized = JSON.stringify(state);
     lastSyncedState = serialized;
-    await fetch("./api/state", {
+    const response = await fetch("./api/state", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: serialized,
     });
+    if (response.ok) localMutationUntil = Date.now() + 1200;
   } catch {
     // Static-file fallback: localStorage remains the source of truth.
+  } finally {
+    pushInFlight = false;
+    if (pushQueued) {
+      pushQueued = false;
+      pushToServer();
+    }
   }
 }
 
@@ -961,6 +981,46 @@ function modalMarkup() {
   const mine = room ? userPlayer(room) : null;
   if (modalState.type === "card") return expandedCardMarkup(modalState.ref);
   if (modalState.type === "cardReveal") return cardRevealMarkup(modalState);
+  if (modalState.type === "supplyResult") {
+    const contract = modalState.contract;
+    return `<div class="modalBackdrop revealBackdrop">
+      <section class="modalSheet cardSheet revealCard contractStageResult" data-modal-body>
+        <div class="revealGlow"></div>
+        <span class="cardType">Этап 1 из 2 · обеспечение</span>
+        <div class="revealStamp">Ресурс зарезервирован</div>
+        <h2>${escapeHtml(contract.title)}</h2>
+        <p>Контракт обеспечен ресурсом, но еще не закрыт. Доход пока не начислен.</p>
+        <div class="resourceLine expanded">${Object.entries(contract.resource).map(([code, amount]) => `<span>${code} ${contract.filled?.[code] || 0}/${amount}</span>`).join("")}</div>
+        <div class="cardFacts">
+          <span>Затраты на ресурс <strong>${modalState.cost} млн</strong></span>
+          <span>Следующий этап <strong>выбор маршрута</strong></span>
+          <span>Доход после поставки <strong>${contract.income} млн</strong></span>
+        </div>
+        <div class="hintBox">Обеспечение заняло коммерческое действие. На следующем ходу откройте контракт в планшете и нажмите «Выбрать маршрут».</div>
+        <div class="modalActions"><button class="primaryButton" data-action="close-modal">Понятно</button></div>
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "deliveryResult") {
+    const result = modalState.result;
+    return `<div class="modalBackdrop revealBackdrop">
+      <section class="modalSheet cardSheet revealCard deliveryResult ${result.risk.triggered ? "riskTriggered" : "riskPassed"}" data-modal-body>
+        <div class="revealGlow"></div>
+        <span class="cardType">Поставка завершена</span>
+        <div class="revealStamp">${result.risk.triggered ? "Риск сработал" : "Сделка закрыта"}</div>
+        <h2>${escapeHtml(result.title)}</h2>
+        <p>Маршрут: ${escapeHtml(result.route)}. Контракт перенесен в историю завершенных сделок.</p>
+        <div class="settlementGrid">
+          <span>Доход<strong>+${result.income} млн</strong></span>
+          <span>Логистика<strong>-${result.logisticsCost} млн</strong></span>
+          <span>Риск сделки<strong>уровень ${result.risk.level}</strong></span>
+          <span>Проверка D6<strong>${result.risk.dice || "не нужна"}</strong></span>
+        </div>
+        ${result.risk.triggered ? `<div class="riskNotice"><strong>${escapeHtml(result.risk.eventTitle || "Операционный риск")}</strong><span>Штраф: -${result.risk.penalty} млн</span></div>` : `<div class="hintBox">Проверка риска пройдена. Дополнительных штрафов нет.</div>`}
+        <div class="modalActions"><button class="primaryButton" data-action="close-modal">Продолжить</button></div>
+      </section>
+    </div>`;
+  }
   if (modalState.type === "commercial" && mine) {
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet cardSheet" data-modal-body>
@@ -1341,8 +1401,14 @@ function bindCommon() {
   document.querySelectorAll("[data-buy-resource-confirm]").forEach((button) =>
     button.addEventListener("click", () => buyResource(button.dataset.buyResourceConfirm, Number(button.dataset.amount || 1))),
   );
-  document.querySelectorAll("[data-take-contract]").forEach((button) => button.addEventListener("click", () => takeDeal("contracts", button.dataset.takeContract)));
-  document.querySelectorAll("[data-take-tender]").forEach((button) => button.addEventListener("click", () => takeDeal("tenders", button.dataset.takeTender)));
+  document.querySelectorAll("[data-take-contract]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    takeDeal("contracts", button.dataset.takeContract);
+  }));
+  document.querySelectorAll("[data-take-tender]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    takeDeal("tenders", button.dataset.takeTender);
+  }));
   document.querySelectorAll("[data-fill-contract]").forEach((button) => button.addEventListener("click", () => fillContract(button.dataset.fillContract)));
   document.querySelectorAll("[data-plan-route]").forEach((button) =>
     button.addEventListener("click", () => {
@@ -1358,9 +1424,18 @@ function bindCommon() {
     }),
   );
   document.querySelectorAll("[data-buy-cell-asset]").forEach((button) => button.addEventListener("click", () => buyCellAsset(button.dataset.buyCellAsset)));
-  document.querySelector("[data-action='draw-proleum']")?.addEventListener("click", drawProleumCard);
-  document.querySelector("[data-action='draw-event']")?.addEventListener("click", drawEventCard);
-  document.querySelector("[data-action='draw-market']")?.addEventListener("click", drawMarketCardFromCell);
+  document.querySelector("[data-action='draw-proleum']")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    drawProleumCard();
+  });
+  document.querySelector("[data-action='draw-event']")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    drawEventCard();
+  });
+  document.querySelector("[data-action='draw-market']")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    drawMarketCardFromCell();
+  });
   document.querySelector("[data-action='broker-contract']")?.addEventListener("click", brokerContract);
   document.querySelector("[data-action='special-cell']")?.addEventListener("click", applySpecialCell);
   document.querySelectorAll("[data-buy-hedge]").forEach((button) => button.addEventListener("click", () => buyHedge(button.dataset.buyHedge)));
@@ -1841,6 +1916,7 @@ function fillContract(contractId) {
   });
   if (player.money < totalCost) {
     room.log.unshift(`${player.name}: не хватает капитала на срочную закупку для "${contract.title}".`);
+    modalState = { type: "contract", contractId };
   } else {
     plan.forEach(({ code, amount, fromWarehouse }) => {
       player.warehouse[code] = (player.warehouse[code] || 0) - fromWarehouse;
@@ -1855,12 +1931,8 @@ function fillContract(contractId) {
     const urgentCount = plan.reduce((sum, item) => sum + item.urgent, 0);
     const hedgeCount = plan.reduce((sum, item) => sum + item.hedgedVolume, 0);
     room.log.unshift(`${player.name}: обеспечил ресурс по сделке "${contract.title}" за ${totalCost} млн${urgentCount ? `, срочно ${urgentCount} жет.` : ""}${hedgeCount ? `, hedge применен на ${hedgeCount} жет.` : ""}.`);
+    modalState = { type: "supplyResult", contract: clone(contract), cost: totalCost };
   }
-  if (["claim", "block", "meeting"].includes(cell.type)) {
-    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["claim", "block", "meeting"] }) : "Недоступно.";
-    return `<div class="decisionBox"><strong>${escapeHtml(cell.title)}</strong><p>${escapeHtml(cell.description)}</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="special-cell" ${gate ? "disabled" : disabled}>Применить эффект</button></div>`;
-  }
-  modalState = null;
   commit();
 }
 
@@ -1894,7 +1966,23 @@ function closeContract(contractId, routeKey) {
   player.activeContracts.splice(index, 1);
   markCommercialAction(room);
   room.log.unshift(`${player.name}: закрыл "${contract.title}" через ${route.title}. Доход ${finalIncome} млн${marketDelta ? ` (рынок ${marketDelta > 0 ? "+" : ""}${marketDelta})` : ""}, логистика ${route.cost} млн${risk.triggered ? `, риск сработал (${risk.eventCard.title}, -${risk.penalty} млн)` : risk.dice ? `, риск пройден D6=${risk.dice}` : ""}.`);
-  modalState = null;
+  modalState = {
+    type: "deliveryResult",
+    result: {
+      title: contract.title,
+      route: route.title,
+      income: finalIncome,
+      logisticsCost: route.cost,
+      marketDelta,
+      risk: {
+        level: risk.risk,
+        dice: risk.dice,
+        triggered: risk.triggered,
+        penalty: risk.penalty,
+        eventTitle: risk.eventCard?.title || "",
+      },
+    },
+  };
   commit();
 }
 
@@ -2009,21 +2097,24 @@ function applySpecialCell() {
       const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
       player.proleumCards.push(clone(cardItem));
       room.log.unshift(`${player.name}: планерка дала карту ПРОЛЕУМ "${cardItem.title}".`);
+      modalState = { type: "cardReveal", kind: "proleum", label: "Карта ПРОЛЕУМ", stamp: "Получена на планерке", card: clone(cardItem) };
     } else {
       player.influence += 1;
       room.log.unshift(`${player.name}: планерка усилила влияние (+1).`);
+      modalState = null;
     }
   } else if (cell.type === "claim") {
     const cost = Math.min(player.money, 2);
     player.money -= cost;
     room.log.unshift(`${player.name}: закрыл претензионный блок за ${cost} млн.`);
+    modalState = null;
   } else if (cell.type === "block") {
     if (player.activeContracts[0]) player.activeContracts[0].duration = Math.max(0, player.activeContracts[0].duration - 1);
     else player.money = Math.max(0, player.money - 1);
     room.log.unshift(`${player.name}: обработал блокировку поставки.`);
+    modalState = null;
   }
   markCellAction(room);
-  modalState = null;
   commit();
 }
 
