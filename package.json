@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "node --check src/app.js && node --check server.js && node --check api/state.js"
+    "build": "node --check src/app.js && node --check server.js && node --check api/state.js",
+    "test": "node tests/game-audit.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

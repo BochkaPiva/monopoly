@@ -2584,7 +2584,7 @@ export const defaultConfig = {
       "routes": [
         "ЖД + нефтебаза"
       ],
-      "duration": 1,
+      "duration": 2,
       "income": 32,
       "risk": 2,
       "victoryPoints": 4,

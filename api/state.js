@@ -63,21 +63,42 @@ async function getState() {
 
 async function saveState(state) {
   const rooms = Array.isArray(state?.rooms) ? state.rooms : [];
+  const deletedRoomIds = Array.isArray(state?.deletedRoomIds) ? state.deletedRoomIds.filter(Boolean) : [];
+  if (deletedRoomIds.length) {
+    const encoded = deletedRoomIds.map((id) => `"${String(id).replaceAll('"', "")}"`).join(",");
+    await supabaseFetch(`game_rooms?id=in.(${encodeURIComponent(encoded)})`, { method: "DELETE" });
+  }
+
+  const existingRows = rooms.length
+    ? await supabaseFetch(`game_rooms?select=id,state&id=in.(${encodeURIComponent(rooms.map((room) => `"${String(room.id).replaceAll('"', "")}"`).join(","))})`)
+    : [];
+  const existingById = new Map((existingRows || []).map((row) => [row.id, row.state]));
   const payload = rooms.map((room) => ({
     id: room.id,
     name: room.name || room.id,
     state: room,
-  }));
+  })).filter((entry) => {
+    const existing = existingById.get(entry.id);
+    if (!existing) return true;
+    const incomingRevision = Number(entry.state?.revision || 0);
+    const existingRevision = Number(existing?.revision || 0);
+    if (incomingRevision !== existingRevision) return incomingRevision > existingRevision;
+    const incomingTime = Date.parse(entry.state?.updatedAt || 0) || 0;
+    const existingTime = Date.parse(existing?.updatedAt || 0) || 0;
+    return incomingTime > existingTime;
+  });
 
   if (!payload.length) return;
 
-  await supabaseFetch("game_rooms?on_conflict=id", {
-    method: "POST",
-    headers: {
-      Prefer: "resolution=merge-duplicates",
-    },
-    body: JSON.stringify(payload),
-  });
+  for (const room of payload) {
+    await supabaseFetch("game_rooms?on_conflict=id", {
+      method: "POST",
+      headers: {
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify([room]),
+    });
+  }
 }
 
 export default async function handler(request, response) {

@@ -29,6 +29,7 @@ let modalState = null;
 let diceState = null;
 let sidePanel = null;
 let dockOpen = false;
+let marketOpen = false;
 let pushInFlight = false;
 let pushQueued = false;
 let localMutationUntil = 0;
@@ -67,6 +68,11 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function deckWindow(collection = [], offset = 0, count = 1) {
+  if (!collection.length || count <= 0) return [];
+  return Array.from({ length: Math.min(count, collection.length) }, (_, index) => collection[(offset + index) % collection.length]);
+}
+
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -78,7 +84,7 @@ function loadState() {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
-  return { config: clone(defaultConfig), rooms: [] };
+  return { config: clone(defaultConfig), rooms: [], deletedRoomIds: [] };
 }
 
 function loadUser() {
@@ -91,6 +97,11 @@ function loadUser() {
 }
 
 function commit() {
+  const room = activeRoom();
+  if (room) {
+    room.revision = (room.revision || 0) + 1;
+    room.updatedAt = new Date().toISOString();
+  }
   const serialized = JSON.stringify(state);
   localStorage.setItem(STORAGE_KEY, serialized);
   lastSyncedState = serialized;
@@ -114,10 +125,24 @@ async function syncFromServer() {
       return;
     }
     normalizeState(remote);
-    const serialized = JSON.stringify(remote);
-    const localSerialized = JSON.stringify(state);
-    if (serialized && serialized !== lastSyncedState && serialized !== localSerialized) {
-      state = remote;
+    const deleted = new Set(state.deletedRoomIds || []);
+    const localById = new Map(state.rooms.map((room) => [room.id, room]));
+    let changed = false;
+    remote.rooms.forEach((remoteRoom) => {
+      if (deleted.has(remoteRoom.id)) return;
+      const localRoom = localById.get(remoteRoom.id);
+      const remoteRevision = Number(remoteRoom.revision || 0);
+      const localRevision = Number(localRoom?.revision || 0);
+      const remoteTime = Date.parse(remoteRoom.updatedAt || 0) || 0;
+      const localTime = Date.parse(localRoom?.updatedAt || 0) || 0;
+      if (!localRoom || remoteRevision > localRevision || (remoteRevision === localRevision && remoteTime > localTime)) {
+        localById.set(remoteRoom.id, remoteRoom);
+        changed = true;
+      }
+    });
+    if (changed) {
+      state.rooms = [...localById.values()].filter((room) => !deleted.has(room.id));
+      const serialized = JSON.stringify(state);
       localStorage.setItem(STORAGE_KEY, serialized);
       lastSyncedState = serialized;
       applyStartupRoute();
@@ -198,11 +223,20 @@ function normalizeState(nextState) {
     nextState.config = clone(defaultConfig);
   }
   nextState.rooms ||= [];
+  nextState.deletedRoomIds ||= [];
   nextState.rooms.forEach((room) => {
     room.day ||= 1;
     room.currentTurn ||= 0;
     room.ownerName ||= room.players?.[0]?.name || "";
+    room.mode ||= "Standard";
+    room.maxDays ||= nextState.config?.settings?.modes?.[room.mode]?.days || 6;
+    room.status ||= "active";
+    room.revision ||= 0;
+    room.updatedAt ||= "";
     room.marketCardIndex ||= 0;
+    room.eventCardIndex ||= 0;
+    room.proleumCardIndex ||= 0;
+    room.tradeOffers ||= [];
     room.log ||= [];
     room.players ||= [];
     room.assetOwnership ||= {};
@@ -241,6 +275,13 @@ function normalizeTurnState(turnState = {}) {
     cellActionUsed: Boolean(turnState.cellActionUsed),
     proleumPlayed: Boolean(turnState.proleumPlayed),
     negotiationUsed: Boolean(turnState.negotiationUsed),
+    logisticsBonus: turnState.logisticsBonus || null,
+    proleumRiskReduction: Number(turnState.proleumRiskReduction || 0),
+    proleumLogisticsDiscount: Number(turnState.proleumLogisticsDiscount || 0),
+    proleumIncomePenalty: Number(turnState.proleumIncomePenalty || 0),
+    skipRisk: Boolean(turnState.skipRisk),
+    extraRail: Number(turnState.extraRail || 0),
+    brokerBonus: Number(turnState.brokerBonus || 0),
   };
 }
 
@@ -301,7 +342,7 @@ function canUserAct(room) {
   return Boolean(current && current.name === user.name);
 }
 
-function cloneDeal(entity) {
+function cloneDeal(entity, room) {
   return {
     instanceId: uid("deal"),
     cardId: entity.id,
@@ -311,7 +352,8 @@ function cloneDeal(entity) {
     resource: clone(entity.resource || {}),
     filled: { REG: 0, PRM: 0, DTL: 0 },
     routes: clone(entity.routes || []),
-    duration: entity.duration || 3,
+    duration: Math.max(2, entity.duration || 3),
+    acceptedDay: room?.day || 1,
     income: entity.income || 0,
     risk: entity.risk ?? 0,
     category: entity.category || "",
@@ -358,6 +400,22 @@ function warehouseCapacity(player) {
   return (state.config?.settings?.warehouseBase || 3) + depotBonus;
 }
 
+function ownedAssetCount(player, type) {
+  return (player.assets || []).filter((item) => item.type === type).length;
+}
+
+function assetBenefitText(type) {
+  const benefits = {
+    supplier: "Скидка 1 млн на каждый жетон при закупке ресурса.",
+    client: "+1 млн к доходу прямой поставки, максимум +2 млн.",
+    broker: "+1 млн к брокерской комиссии.",
+    rail: "Скидка 1 млн на ЖД-логистику, максимум -2 млн.",
+    road: "Скидка 1 млн на автомаршрут.",
+    depot: "+2 места на складе и -1 риск маршрута через нефтебазу.",
+  };
+  return benefits[type] || "Актив учитывается в рейтинге компании.";
+}
+
 function resourceBuyLimit(room, player) {
   const cellType = currentCell(room, player)?.type;
   return ["supplier", "market"].includes(cellType) ? 3 : 2;
@@ -365,6 +423,7 @@ function resourceBuyLimit(room, player) {
 
 function actionGate(room, player, options = {}) {
   if (!room || !player || !canUserAct(room)) return "Сейчас ходит другой игрок.";
+  if (room.status === "finished") return "Партия завершена.";
   const turn = normalizeTurnState(room.turnState);
   const cell = currentCell(room, player);
   if (options.requiresRolled && !turn.rolled) return "Сначала бросьте кубики.";
@@ -391,7 +450,7 @@ function markCellAction(room) {
 
 function rejectAction(room, message) {
   if (room && message) room.log.unshift(`Действие недоступно: ${message}`);
-  modalState = null;
+  modalState = { type: "notice", title: "Действие недоступно", message };
   commit();
 }
 
@@ -426,40 +485,52 @@ function assetCostForCell(cell) {
   return costs[cell?.type] || 10;
 }
 
-function routeOptions(room, contract) {
+function routeOptions(room, contract, player = userPlayer(room) || currentPlayer(room)) {
   const total = resourceTotal(contract.resource);
   const market = room.market || createMarket(room);
-  const availableRail = Math.max(0, (market.logistics.rail || 0) - (market.usedLogistics.rail || 0));
+  const availableRail = Math.max(0, (market.logistics.rail || 0) + Number(room.turnState?.extraRail || 0) - (market.usedLogistics.rail || 0));
   const availableDepot = Math.max(0, (market.logistics.depot || 0) - (market.usedLogistics.depot || 0));
   const allowed = contract.routes || [];
+  const turnBonus = room.turnState?.logisticsBonus;
+  const roadDiscount = Math.min(1, ownedAssetCount(player, "road")) + (turnBonus === "road" ? 1 : 0);
+  const railDiscount = Math.min(2, ownedAssetCount(player, "rail")) + (turnBonus === "rail" ? 1 : 0);
+  const depotDiscount = turnBonus === "depot" ? 1 : 0;
+  const proleumDiscount = Number(room.turnState?.proleumLogisticsDiscount || 0);
   const options = [];
 
   if (allowed.some((route) => route.includes("Авто")) && total <= 2) {
-    options.push({ key: "auto", title: "Авто", cost: total, rail: 0, depot: 0, risk: 0, available: true, note: "Быстро, без общей мощности, только малые поставки." });
+    options.push({ key: "auto", title: "Авто", cost: Math.max(1, total - roadDiscount - proleumDiscount), rail: 0, depot: 0, risk: 0, available: true, note: roadDiscount || proleumDiscount ? "Тактическая скидка применена." : "Быстро, без общей мощности, только малые поставки." });
   }
   if (allowed.some((route) => route === "ЖД" || route.includes("ЖД"))) {
-    const cost = 2 + Math.ceil(total / 2);
-    options.push({ key: "rail", title: "ЖД", cost, rail: 1, depot: 0, risk: 1, available: availableRail >= 1, note: "Дешевле на объеме, но повышает операционный риск." });
+    const cost = Math.max(1, 2 + Math.ceil(total / 2) - railDiscount - proleumDiscount);
+    options.push({ key: "rail", title: "ЖД", cost, rail: 1, depot: 0, risk: turnBonus === "rail" ? 0 : 1, available: availableRail >= 1, note: railDiscount ? "Скидка ЖД-актива или клетки применена." : "Дешевле на объеме, но повышает операционный риск." });
   }
   if (allowed.some((route) => route.toLowerCase().includes("нефтебаза"))) {
-    const cost = 3 + Math.ceil(total / 2);
-    options.push({ key: "rail-depot", title: "ЖД + нефтебаза", cost, rail: 1, depot: 1, risk: 0, available: availableRail >= 1 && availableDepot >= 1, note: "Надежнее для крупных сделок, занимает две мощности." });
+    const cost = Math.max(1, 3 + Math.ceil(total / 2) - railDiscount - depotDiscount - proleumDiscount);
+    options.push({ key: "rail-depot", title: "ЖД + нефтебаза", cost, rail: 1, depot: 1, risk: 0, available: availableRail >= 1 && availableDepot >= 1, note: depotDiscount ? "Бонус нефтебазы применен." : "Надежнее для крупных сделок, занимает две мощности." });
   }
 
   return options;
 }
 
-function riskLevel(contract, route, player) {
+function riskLevel(contract, route, player, room = activeRoom()) {
   const base = Number.isFinite(Number(contract.risk)) ? Number(contract.risk) : { "низкий": 0, "средний": 1, "высокий": 2, "тендер": 2 }[contract.risk] ?? 1;
   const efficiencyReduce = player.efficiency >= 5 ? 1 : 0;
-  return Math.max(0, base + (route?.risk || 0) - efficiencyReduce);
+  const depotReduce = route?.key === "rail-depot" && ownedAssetCount(player, "depot") ? 1 : 0;
+  const proleumReduce = Number(room?.turnState?.proleumRiskReduction || 0);
+  return Math.max(0, base + (route?.risk || 0) - efficiencyReduce - depotReduce - proleumReduce);
+}
+
+function riskChance(level) {
+  return level <= 0 ? 0 : Math.round((Math.min(5, level + 1) / 6) * 100);
 }
 
 function resolveRisk(room, player, contract, route) {
   const risk = riskLevel(contract, route, player);
+  if (room.turnState?.skipRisk) return { triggered: false, risk, penalty: 0, dice: null, eventCard: null, skipped: true };
   if (risk <= 0) return { triggered: false, risk, penalty: 0, dice: null, eventCard: null };
   const dice = Math.ceil(Math.random() * 6);
-  const threshold = risk === 1 ? 2 : risk === 2 ? 3 : 6;
+  const threshold = Math.min(5, risk + 1);
   const triggered = dice <= threshold;
   if (!triggered) return { triggered, risk, penalty: 0, dice, eventCard: null };
   const eventCard = state.config.events[(room.log.length + room.day + risk) % state.config.events.length];
@@ -562,6 +633,13 @@ function roomsMarkup() {
         <h2>Создать комнату</h2>
         <p>Комнаты сохраняются локально и синхронизируются между вкладками браузера для быстрых тестов сценариев.</p>
         <input id="room-name" value="Тестовая партия PROLEUM" />
+        <label class="roomModeLabel">Режим
+          <select id="room-mode">
+            <option value="Briefing">Briefing · 5 дней</option>
+            <option value="Standard" selected>Standard · 6 дней</option>
+            <option value="Signature">Signature · 8 дней</option>
+          </select>
+        </label>
         <button class="primaryButton" data-action="create-room">Создать</button>
       </div>
       <div class="roomGrid">
@@ -576,7 +654,7 @@ function roomCardMarkup(room) {
   const canDelete = user.role === "admin" || room.ownerName === user.name;
   return `
     <article class="roomCard ${room.id === activeRoomId ? "active" : ""}">
-      <div><h3>${escapeHtml(room.name)}</h3><span>${room.players.length} игроков · день ${room.day}${room.ownerName ? ` · владелец ${escapeHtml(room.ownerName)}` : ""}</span></div>
+      <div><h3>${escapeHtml(room.name)}</h3><span>${room.players.length} игроков · ${escapeHtml(room.mode || "Standard")} · день ${room.day}/${room.maxDays || 6}${room.ownerName ? ` · владелец ${escapeHtml(room.ownerName)}` : ""}</span></div>
       <div class="miniPlayers">${initials}</div>
       <div class="roomActions">
         <button class="secondaryButton" data-copy="${room.id}">ID</button>
@@ -598,12 +676,14 @@ function gameMarkup(room) {
   const playerCount = String(Math.max(2, Math.min(6, room.players.length || 2)));
   const openContracts = state.config.settings?.contractsByPlayers?.[playerCount] || 5;
   const openTenders = state.config.settings?.tendersByPlayers?.[playerCount] || 1;
+  const contracts = deckWindow(state.config.contracts, (room.day - 1) * openContracts, openContracts);
+  const tenders = deckWindow(state.config.tenders, (room.day - 1) * openTenders, openTenders);
   return `
     <section class="gameLayout gameShell">
       ${topBarMarkup(room, selected)}
       ${playerRailMarkup(room)}
       <div class="boardPanel">${boardMarkup(room)}</div>
-      ${marketTerminalMarkup(room, openContracts, openTenders, contractReason, tenderReason)}
+      ${marketTerminalMarkup(room, contracts, tenders, contractReason, tenderReason)}
       ${playerDockMarkup(room)}
       ${sidePanelMarkup(room)}
     </section>`;
@@ -613,6 +693,7 @@ function turnPhase(room, selected) {
   const mine = userPlayer(room);
   const myTurn = canUserAct(room);
   const turnState = normalizeTurnState(room.turnState);
+  if (room.status === "finished") return { id: "FINISHED", label: "Итоги", cta: "Показать результаты", hint: "Партия завершена.", action: "show-results" };
   if (!myTurn) return { id: "WAITING", label: "Ожидание", cta: "Не ваш ход", hint: `Ожидайте, сейчас ходит ${currentPlayer(room)?.name || "другой игрок"}.`, action: null };
   if (!turnState.rolled) return { id: "ROLL", label: "Бросок", cta: "Бросить кубики", hint: "Бросьте 2D6, чтобы перейти на клетку.", action: "roll" };
   if (!turnState.cellActionUsed) return { id: "CELL_ACTION", label: "Клетка", cta: "Открыть действие клетки", hint: `Вы на клетке "${selected?.title || ""}". Откройте действие или переходите к коммерции.`, action: "open-cell", cellId: selected?.id };
@@ -626,6 +707,8 @@ function topBarMarkup(room, selected) {
   const phase = turnPhase(room, selected);
   const disabled = phase.action ? "" : "disabled";
   const canFinishEarly = canUserAct(room) && turnState.rolled && phase.id !== "TURN_END_READY";
+  const incomingTrades = room.tradeOffers.filter((offer) => offer.status === "pending" && offer.buyerName === user.name);
+  const canNegotiate = canUserAct(room) && turnState.rolled && !turnState.negotiationUsed && room.players.length > 1;
   return `<header class="topBar" data-turn="${room.currentTurn}-${room.day}">
     <div class="turnTimer"><i></i></div>
     <div class="topBarMain">
@@ -636,21 +719,22 @@ function topBarMarkup(room, selected) {
         <h2>${escapeHtml(actingPlayer?.name || "Нет игроков")}</h2>
         <p>${escapeHtml(phase.hint)}</p>
       </div>
-      <div class="turnChecklist">
-        <span class="${turnState.rolled ? "done" : ""} ${phase.id === "ROLL" ? "active" : ""}">Бросок</span>
-        <span class="${turnState.cellActionUsed ? "done" : ""} ${phase.id === "CELL_ACTION" ? "active" : ""}">Клетка</span>
-        <span class="${turnState.commercialActionUsed ? "done" : ""} ${phase.id === "COMMERCIAL_ACTION" ? "active" : ""}">Коммерция</span>
-        <span class="${phase.id === "TURN_END_READY" ? "active" : ""}">Финал</span>
-      </div>
       <div class="diceConsole ${diceState ? "isRolling" : ""}">
         <div class="dicePair"><span>${diceState?.a || "?"}</span><span>${diceState?.b || "?"}</span></div>
       </div>
       <div class="turnActions">
         <button class="primaryButton topCta" data-action="${phase.action || "noop"}" data-cell-id="${phase.cellId || ""}" ${disabled}>${escapeHtml(phase.cta)}</button>
+        ${incomingTrades.length ? `<button class="secondaryButton iconButton tradeAlert" data-action="open-trades">Предложения ${incomingTrades.length}</button>` : ""}
+        ${canNegotiate ? `<button class="secondaryButton iconButton" data-action="open-trade-builder">Сделка</button>` : ""}
         ${canFinishEarly ? `<button class="secondaryButton iconButton" data-action="end-turn" title="Завершить ход без обязательного действия">Завершить</button>` : ""}
-        <button class="secondaryButton iconButton" data-side-panel="log">Лог</button>
-        <button class="secondaryButton iconButton" data-view="rules">Правила</button>
-        <button class="secondaryButton iconButton" data-leave-room="${room.id}">Покинуть</button>
+        <details class="topMenu">
+          <summary aria-label="Меню партии">•••</summary>
+          <div>
+            <button class="secondaryButton" data-side-panel="log">Журнал</button>
+            <button class="secondaryButton" data-view="rules">Правила</button>
+            <button class="secondaryButton" data-leave-room="${room.id}">Покинуть партию</button>
+          </div>
+        </details>
       </div>
     </div>
   </header>`;
@@ -718,14 +802,13 @@ function resourceTickerMarkup(code, meta, market, resourceReason, className = "t
 function marketTerminalMarkup(room, openContracts, openTenders, contractReason, tenderReason) {
   normalizeMarket(room);
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
-  return `<aside class="marketPanel marketTerminal">
-    <header class="terminalHeader"><div><span>Сделки рынка</span><strong>Контракты и тендер</strong></div><button class="ghostButton" data-open-card="marketCard:${marketCard.id}">Карта дня</button></header>
-    <section class="terminalDeck"><h3>Открытые контракты</h3><div class="terminalScroll">${state.config.contracts
-      .slice(0, openContracts)
+  return `<aside class="marketPanel marketTerminal ${marketOpen ? "open" : ""}">
+    <button class="marketHandle" data-action="toggle-market"><span>Сделки</span><b>${openContracts.length + openTenders.length}</b></button>
+    <header class="terminalHeader"><div><span>Сделки рынка</span><strong>Контракты и тендер</strong></div><div><button class="ghostButton" data-open-card="marketCard:${marketCard.id}">Карта дня</button><button class="terminalClose" data-action="toggle-market" aria-label="Свернуть">×</button></div></header>
+    <section class="terminalDeck"><h3>Открытые контракты</h3><div class="terminalScroll">${openContracts
       .map((item) => entityCardMarkup(item, true, { action: "take-contract", label: "Взять", disabled: Boolean(contractReason), reason: contractReason, source: "market" }))
       .join("")}</div></section>
-    <section class="terminalDeck tenderDeck"><h3>Тендер дня</h3>${state.config.tenders
-      .slice(0, openTenders)
+    <section class="terminalDeck tenderDeck"><h3>Тендер дня</h3>${openTenders
       .map((item) => entityCardMarkup(item, true, { action: "take-tender", label: "Заявиться", disabled: Boolean(tenderReason), reason: tenderReason, source: "tender" }))
       .join("")}</section>
   </aside>`;
@@ -970,9 +1053,31 @@ function expandedCardActions(room, mine, card, ref) {
     ].join("");
   }
   if (zone === "warehouse") return actionButton("Подсветить сделки", "noop", false, "Перекладывание ресурса в ручном режиме будет в следующем UX-слое.");
-  if (zone === "proleum") return actionButton("Сыграть карту", "noop", false, "Применение карты зависит от события или поставки.");
+  if (zone === "proleum") {
+    const playability = proleumPlayability(room, mine, card);
+    return actionButton("Сыграть карту", "", playability.enabled, playability.reason, `data-play-proleum="${card.id}"`);
+  }
   if (zone === "marketCard") return actionButton("Понятно", "close-modal", true, "", `data-action="close-modal"`);
   return actionButton("Подробнее", "noop", false, "Для этой карточки пока доступен просмотр.");
+}
+
+function proleumPlayability(room, player, card) {
+  if (!canUserAct(room)) return { enabled: false, reason: "Карту можно сыграть только в свой ход." };
+  if (!room.turnState?.rolled) return { enabled: false, reason: "Сначала бросьте кубики." };
+  if (room.turnState?.proleumPlayed) return { enabled: false, reason: "В этот ход уже сыграна карта ПРОЛЕУМ." };
+  const immediate = new Set([
+    "Альтернативный базис найден",
+    "Экспресс-анализ риска",
+    "Коммерческий компромисс",
+    "Слот подтвержден",
+    "Сервисный коридор",
+    "Проверенный маршрут",
+    "Брокерское сопровождение ПРОЛЕУМ",
+    "Приоритетное окно поставки",
+  ]);
+  if (!immediate.has(card.title)) return { enabled: false, reason: "Это контекстная карта: она применяется автоматически в подходящем событии или поставке." };
+  if (!player.activeContracts.length && !card.title.includes("Приоритетное окно")) return { enabled: false, reason: "Для этой карты нужен активный контракт." };
+  return { enabled: true, reason: "" };
 }
 
 function modalMarkup() {
@@ -981,6 +1086,50 @@ function modalMarkup() {
   const mine = room ? userPlayer(room) : null;
   if (modalState.type === "card") return expandedCardMarkup(modalState.ref);
   if (modalState.type === "cardReveal") return cardRevealMarkup(modalState);
+  if (modalState.type === "notice") {
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet noticeSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="cardType">Проверка правил</span>
+        <h2>${escapeHtml(modalState.title)}</h2>
+        <p>${escapeHtml(modalState.message || "Это действие сейчас недоступно.")}</p>
+        <div class="modalActions"><button class="primaryButton" data-action="close-modal">Понятно</button></div>
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "tradeBuilder" && room && mine) {
+    const targets = room.players.filter((player) => player.id !== mine.id);
+    const availableResources = Object.entries(mine.warehouse || {}).filter(([, amount]) => amount > 0);
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet tradeSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="cardType">Переговорная сделка</span>
+        <h2>Предложить ресурс игроку</h2>
+        <p>Одно предложение за ход. Ресурс и деньги передаются только после подтверждения второй стороной.</p>
+        ${availableResources.length ? `<div class="tradeForm">
+          <label>Покупатель<select id="trade-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("")}</select></label>
+          <label>Ресурс<select id="trade-resource">${availableResources.map(([code, amount]) => `<option value="${code}">${code} · доступно ${amount}</option>`).join("")}</select></label>
+          <label>Цена, млн<input id="trade-price" type="number" min="0" max="20" value="4" /></label>
+        </div>
+        <div class="modalActions"><button class="primaryButton" data-action="create-trade">Отправить предложение</button></div>` : `<div class="hintBox">На складе нет ресурсов для продажи.</div>`}
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "tradeInbox" && room) {
+    const offers = room.tradeOffers.filter((offer) => offer.status === "pending" && offer.buyerName === user.name);
+    return `<div class="modalBackdrop" data-action="close-modal">
+      <section class="modalSheet tradeSheet" data-modal-body>
+        <button class="modalClose" data-action="close-modal">×</button>
+        <span class="cardType">Входящие предложения</span>
+        <h2>Сделки игроков</h2>
+        <div class="tradeOfferList">${offers.map((offer) => `<article>
+          <div><span>${escapeHtml(offer.sellerName)} предлагает</span><strong>${offer.resource} x${offer.amount}</strong></div>
+          <b>${offer.price} млн</b>
+          <div class="miniActions"><button class="primaryButton" data-accept-trade="${offer.id}">Принять</button><button class="secondaryButton" data-decline-trade="${offer.id}">Отклонить</button></div>
+        </article>`).join("") || `<div class="hintBox">Новых предложений нет.</div>`}</div>
+      </section>
+    </div>`;
+  }
   if (modalState.type === "supplyResult") {
     const contract = modalState.contract;
     return `<div class="modalBackdrop revealBackdrop">
@@ -1013,11 +1162,27 @@ function modalMarkup() {
         <div class="settlementGrid">
           <span>Доход<strong>+${result.income} млн</strong></span>
           <span>Логистика<strong>-${result.logisticsCost} млн</strong></span>
+          ${result.clientBonus ? `<span>Клиентский актив<strong>+${result.clientBonus} млн</strong></span>` : ""}
+          ${result.proleumPenalty ? `<span>Компромисс ПРОЛЕУМ<strong>-${result.proleumPenalty} млн</strong></span>` : ""}
           <span>Риск сделки<strong>уровень ${result.risk.level}</strong></span>
-          <span>Проверка D6<strong>${result.risk.dice || "не нужна"}</strong></span>
+          <span>Проверка D6<strong>${result.risk.skipped ? "отменена картой" : result.risk.dice || "не нужна"}</strong></span>
         </div>
         ${result.risk.triggered ? `<div class="riskNotice"><strong>${escapeHtml(result.risk.eventTitle || "Операционный риск")}</strong><span>Штраф: -${result.risk.penalty} млн</span></div>` : `<div class="hintBox">Проверка риска пройдена. Дополнительных штрафов нет.</div>`}
         <div class="modalActions"><button class="primaryButton" data-action="close-modal">Продолжить</button></div>
+      </section>
+    </div>`;
+  }
+  if (modalState.type === "finalResults") {
+    const ranking = [...(room?.players || [])].sort((a, b) => scorePlayer(b) - scorePlayer(a));
+    return `<div class="modalBackdrop revealBackdrop">
+      <section class="modalSheet cardSheet revealCard finalResults" data-modal-body>
+        <div class="revealGlow"></div>
+        <span class="cardType">Финал партии · ${escapeHtml(room?.mode || "Standard")}</span>
+        <div class="revealStamp">Торговый цикл завершен</div>
+        <h2>${escapeHtml(ranking[0]?.name || "Победитель")}</h2>
+        <p>Побеждает компания с лучшим совокупным рейтингом капитала, контрактов и деловой репутации.</p>
+        <div class="rankingList">${ranking.map((player, index) => `<div class="${index === 0 ? "winner" : ""}"><b>${index + 1}</b><span>${escapeHtml(player.name)}</span><strong>${scorePlayer(player)} очк.</strong><small>${player.money} млн · закрыто ${player.completedContracts.length} · срывы ${player.failedContracts.length}</small></div>`).join("")}</div>
+        <div class="modalActions"><button class="primaryButton" data-view="rooms">К списку партий</button><button class="secondaryButton" data-action="close-modal">Остаться за столом</button></div>
       </section>
     </div>`;
   }
@@ -1138,7 +1303,7 @@ function modalMarkup() {
             .map((route) => `<button class="routeOption" data-close-contract="${contract.instanceId}" data-route="${route.key}" ${route.available ? "" : "disabled"}>
               <strong>${escapeHtml(route.title)}</strong>
               <span>Стоимость ${route.cost} млн</span>
-              <span>Риск сделки ${riskLevel(contract, route, mine)}</span>
+              <span>Риск ${riskLevel(contract, route, mine)} · шанс события ${riskChance(riskLevel(contract, route, mine))}%</span>
               <small>${escapeHtml(route.note)}</small>
               ${route.rail || route.depot ? `<em>Мощность: ЖД ${route.rail}, база ${route.depot}</em>` : `<em>Без общей мощности</em>`}
             </button>`)
@@ -1218,14 +1383,31 @@ function cellActionMarkup(cell, myTurn) {
     const price = assetCostForCell(cell);
     const reason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : assetGate;
     return `<div class="decisionBox"><strong>Клиентский сегмент</strong><p>Клетка дает доступ к контрактам и может стать долгосрочным активом.</p>
-      <div class="modalActions">${state.config.contracts
-        .slice(0, 3)
+      <div class="modalActions">${deckWindow(state.config.contracts, (room.day - 1) * 3, 3)
         .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${contractGate ? "disabled" : disabled} title="${escapeHtml(contractGate)}">${escapeHtml(item.title)}</button>`)
         .join("")}</div>
       ${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${reason ? "disabled" : disabled}>Купить сегмент за ${price} млн</button></div>`;
   }
-  if (["asset", "depot", "rail", "road", "supplier", "broker"].includes(cell.type)) {
-    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["asset", "depot", "rail", "road", "client", "supplier", "broker"] }) : "Недоступно.";
+  if (["rail", "road", "depot"].includes(cell.type)) {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["rail", "road", "depot"] }) : "Недоступно.";
+    const owner = room?.assetOwnership?.[cell.id];
+    const price = assetCostForCell(cell);
+    const buyReason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : gate;
+    const bonusLabels = {
+      rail: "ЖД в этот ход: стоимость -1 млн, маршрут не добавляет риск",
+      road: "Автомаршрут в этот ход: стоимость -1 млн",
+      depot: "Маршрут через нефтебазу в этот ход: стоимость -1 млн",
+    };
+    return `<div class="decisionBox"><strong>Логистический выбор</strong><p>${escapeHtml(cell.description)}</p>
+      <div class="modalActions">
+        <button class="primaryButton" data-logistics-bonus="${cell.type}" ${gate ? "disabled" : disabled}>Использовать бонус</button>
+        <button class="secondaryButton" data-buy-cell-asset="${cell.id}" ${buyReason ? "disabled" : disabled}>Купить актив за ${price} млн</button>
+      </div>
+      <small>${escapeHtml(bonusLabels[cell.type])}</small>
+    </div>`;
+  }
+  if (["asset", "supplier", "broker"].includes(cell.type)) {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["asset", "supplier", "broker"] }) : "Недоступно.";
     const owner = room?.assetOwnership?.[cell.id];
     const price = assetCostForCell(cell);
     const reason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : gate;
@@ -1233,8 +1415,7 @@ function cellActionMarkup(cell, myTurn) {
   }
   if (cell.type === "contract") {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["contract"] }) : "Недоступно.";
-    return `<div class="modalActions">${state.config.contracts
-      .slice(0, 3)
+    return `<div class="modalActions">${deckWindow(state.config.contracts, (room.day - 1) * 3, 3)
       .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">${escapeHtml(item.title)}</button>`)
       .join("")}</div>`;
   }
@@ -1312,6 +1493,9 @@ function bindCommon() {
   document.querySelectorAll("[data-view]").forEach((button) =>
     button.addEventListener("click", () => {
       view = button.dataset.view;
+      modalState = null;
+      sidePanel = null;
+      if (view !== "game") window.location.hash = "";
       render();
     }),
   );
@@ -1324,10 +1508,12 @@ function bindCommon() {
   });
   document.querySelector("[data-action='create-room']")?.addEventListener("click", () => {
     const name = document.querySelector("#room-name").value.trim() || "Тестовая партия PROLEUM";
-    const room = createRoom(name);
+    const mode = document.querySelector("#room-mode")?.value || "Standard";
+    const room = createRoom(name, mode);
     state.rooms.unshift(room);
     activeRoomId = room.id;
     view = "game";
+    window.location.hash = `room=${encodeURIComponent(room.id)}`;
     commit();
   });
   document.querySelectorAll("[data-join-room]").forEach((button) =>
@@ -1335,6 +1521,7 @@ function bindCommon() {
       joinRoom(button.dataset.joinRoom);
       activeRoomId = button.dataset.joinRoom;
       view = "game";
+      window.location.hash = `room=${encodeURIComponent(button.dataset.joinRoom)}`;
       commit();
     }),
   );
@@ -1342,6 +1529,7 @@ function bindCommon() {
     button.addEventListener("click", () => {
       activeRoomId = button.dataset.openRoom;
       view = "game";
+      window.location.hash = `room=${encodeURIComponent(button.dataset.openRoom)}`;
       render();
     }),
   );
@@ -1364,12 +1552,33 @@ function bindCommon() {
     modalState = { type: "commercial" };
     render();
   });
+  document.querySelector("[data-action='show-results']")?.addEventListener("click", () => {
+    modalState = { type: "finalResults" };
+    render();
+  });
+  document.querySelector("[data-action='open-trade-builder']")?.addEventListener("click", () => {
+    modalState = { type: "tradeBuilder" };
+    render();
+  });
+  document.querySelector("[data-action='open-trades']")?.addEventListener("click", () => {
+    modalState = { type: "tradeInbox" };
+    render();
+  });
+  document.querySelector("[data-action='create-trade']")?.addEventListener("click", createTradeOffer);
+  document.querySelectorAll("[data-accept-trade]").forEach((button) => button.addEventListener("click", () => resolveTradeOffer(button.dataset.acceptTrade, true)));
+  document.querySelectorAll("[data-decline-trade]").forEach((button) => button.addEventListener("click", () => resolveTradeOffer(button.dataset.declineTrade, false)));
   document.querySelector("[data-action='skip-cell']")?.addEventListener("click", skipCellAction);
   document.querySelector("[data-action='skip-commercial']")?.addEventListener("click", skipCommercialAction);
   document.querySelector("[data-action='toggle-tablet']")?.addEventListener("click", () => {
     dockOpen = !dockOpen;
     render();
   });
+  document.querySelectorAll("[data-action='toggle-market']").forEach((button) =>
+    button.addEventListener("click", () => {
+      marketOpen = !marketOpen;
+      render();
+    }),
+  );
   document.querySelector("[data-action='dismiss-turn-prompt']")?.addEventListener("click", dismissTurnPrompt);
   document.querySelector("[data-action='next-day']")?.addEventListener("click", nextDay);
   document.querySelectorAll("[data-side-panel]").forEach((button) =>
@@ -1424,6 +1633,7 @@ function bindCommon() {
     }),
   );
   document.querySelectorAll("[data-buy-cell-asset]").forEach((button) => button.addEventListener("click", () => buyCellAsset(button.dataset.buyCellAsset)));
+  document.querySelectorAll("[data-logistics-bonus]").forEach((button) => button.addEventListener("click", () => activateLogisticsBonus(button.dataset.logisticsBonus)));
   document.querySelector("[data-action='draw-proleum']")?.addEventListener("click", (event) => {
     event.stopPropagation();
     drawProleumCard();
@@ -1439,10 +1649,14 @@ function bindCommon() {
   document.querySelector("[data-action='broker-contract']")?.addEventListener("click", brokerContract);
   document.querySelector("[data-action='special-cell']")?.addEventListener("click", applySpecialCell);
   document.querySelectorAll("[data-buy-hedge]").forEach((button) => button.addEventListener("click", () => buyHedge(button.dataset.buyHedge)));
+  document.querySelectorAll("[data-play-proleum]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    playProleumCard(button.dataset.playProleum);
+  }));
   document.querySelectorAll("[data-action='resolve-event']").forEach((button) => button.addEventListener("click", () => resolveEventChoice(button.dataset.choice)));
   document.querySelectorAll("[data-action='close-modal']").forEach((item) =>
     item.addEventListener("click", (event) => {
-      if (event.target.closest("[data-modal-body]") && !event.target.closest("[data-action='close-modal']")) return;
+      if (item.classList.contains("modalBackdrop") && event.target !== item) return;
       modalState = null;
       render();
     }),
@@ -1459,11 +1673,17 @@ function bindCommon() {
   bindEditor();
 }
 
-function createRoom(name) {
+function createRoom(name, mode = "Standard") {
+  const modeSettings = state.config?.settings?.modes?.[mode] || state.config?.settings?.modes?.Standard || { days: 6 };
   const room = {
     id: uid("room"),
     name,
     ownerName: user.name,
+    mode,
+    maxDays: modeSettings.days || 6,
+    status: "active",
+    revision: 0,
+    updatedAt: new Date().toISOString(),
     day: 1,
     currentTurn: 0,
     marketCardIndex: 0,
@@ -1593,12 +1813,19 @@ function leaveRoom(roomId) {
 
   const leavingPlayer = room.players[playerIndex];
   const wasCurrent = playerIndex === room.currentTurn;
+  room.tradeOffers = (room.tradeOffers || []).map((offer) =>
+    offer.status === "pending" && (offer.sellerId === leavingPlayer.id || offer.buyerId === leavingPlayer.id)
+      ? { ...offer, status: "cancelled", resolvedAt: new Date().toISOString() }
+      : offer,
+  );
   room.players.splice(playerIndex, 1);
   Object.entries(room.assetOwnership || {}).forEach(([cellId, asset]) => {
     if (asset.ownerId === leavingPlayer.id) delete room.assetOwnership[cellId];
   });
 
   if (!room.players.length) {
+    state.deletedRoomIds ||= [];
+    state.deletedRoomIds.push(roomId);
     state.rooms = state.rooms.filter((item) => item.id !== roomId);
   } else {
     if (playerIndex < room.currentTurn) room.currentTurn -= 1;
@@ -1621,6 +1848,8 @@ function deleteRoom(roomId) {
   if (!room) return;
   if (user.role !== "admin" && room.ownerName !== user.name) return;
   if (!window.confirm(`Удалить партию «${room.name}»? Это действие нельзя отменить.`)) return;
+  state.deletedRoomIds ||= [];
+  if (!state.deletedRoomIds.includes(roomId)) state.deletedRoomIds.push(roomId);
   state.rooms = state.rooms.filter((item) => item.id !== roomId);
   if (activeRoomId === roomId) activeRoomId = null;
   view = "rooms";
@@ -1651,6 +1880,67 @@ function skipCommercialAction() {
   room.turnState.promptDismissed = true;
   room.log.unshift(`${player.name}: пропустил коммерческое действие.`);
   modalState = null;
+  commit();
+}
+
+function createTradeOffer() {
+  const room = activeRoom();
+  const seller = requireTurnPlayer();
+  if (!room || !seller) return;
+  room.turnState = normalizeTurnState(room.turnState);
+  if (!room.turnState.rolled) return rejectAction(room, "Сначала бросьте кубики.");
+  if (room.turnState.negotiationUsed) return rejectAction(room, "Переговорная сделка в этот ход уже использована.");
+  const buyerId = document.querySelector("#trade-target")?.value;
+  const resource = document.querySelector("#trade-resource")?.value;
+  const price = Math.max(0, Math.min(20, Number(document.querySelector("#trade-price")?.value || 0)));
+  const buyer = room.players.find((player) => player.id === buyerId);
+  if (!buyer || buyer.id === seller.id) return rejectAction(room, "Выберите другого игрока.");
+  if (!resource || (seller.warehouse?.[resource] || 0) < 1) return rejectAction(room, "Выбранного ресурса больше нет на складе.");
+  room.tradeOffers.push({
+    id: uid("trade"),
+    status: "pending",
+    sellerId: seller.id,
+    sellerName: seller.name,
+    buyerId: buyer.id,
+    buyerName: buyer.name,
+    resource,
+    amount: 1,
+    price,
+    createdDay: room.day,
+  });
+  room.turnState.negotiationUsed = true;
+  room.log.unshift(`${seller.name}: предложил ${buyer.name} купить ${resource} x1 за ${price} млн.`);
+  modalState = { type: "notice", title: "Предложение отправлено", message: `${buyer.name} увидит его в панели хода.` };
+  commit();
+}
+
+function resolveTradeOffer(offerId, accepted) {
+  const room = activeRoom();
+  if (!room) return;
+  const offer = room.tradeOffers.find((item) => item.id === offerId && item.status === "pending");
+  if (!offer || offer.buyerName !== user.name) return;
+  const seller = room.players.find((player) => player.id === offer.sellerId);
+  const buyer = room.players.find((player) => player.id === offer.buyerId);
+  if (!accepted) {
+    offer.status = "declined";
+    offer.resolvedAt = new Date().toISOString();
+    room.log.unshift(`${buyer?.name || user.name}: отклонил предложение ${offer.sellerName}.`);
+    modalState = null;
+    commit();
+    return;
+  }
+  if (!seller || !buyer) return rejectAction(room, "Один из участников сделки покинул комнату.");
+  if ((seller.warehouse?.[offer.resource] || 0) < offer.amount) return rejectAction(room, "У продавца уже нет предложенного ресурса.");
+  if (buyer.money < offer.price) return rejectAction(room, `Для сделки нужно ${offer.price} млн. Доступно: ${buyer.money} млн.`);
+  if (warehouseUsed(buyer) + offer.amount > warehouseCapacity(buyer)) return rejectAction(room, "На складе покупателя нет свободного места.");
+  seller.warehouse[offer.resource] -= offer.amount;
+  buyer.warehouse[offer.resource] = (buyer.warehouse[offer.resource] || 0) + offer.amount;
+  buyer.money -= offer.price;
+  seller.money += offer.price;
+  offer.status = "accepted";
+  offer.resolvedAt = new Date().toISOString();
+  room.log.unshift(`${buyer.name}: принял сделку ${offer.sellerName}, ${offer.resource} x${offer.amount} за ${offer.price} млн.`);
+  modalState = { type: "notice", title: "Сделка завершена", message: `${offer.resource} добавлен на склад, ${offer.price} млн перечислены продавцу.` };
   commit();
 }
 
@@ -1691,14 +1981,31 @@ function endTurn() {
   const room = activeRoom();
   if (!room || !canUserAct(room) || !room.turnState?.rolled) return;
   const player = currentPlayer(room);
-  ageContracts(room, player);
   room.log.unshift(`${player.name}: завершил ход.`);
   const nextTurn = (room.currentTurn + 1) % room.players.length;
   room.currentTurn = nextTurn;
   room.turnState = normalizeTurnState();
-  if (nextTurn === 0) refreshTradingDay(room, "Все игроки сделали ход.");
-  modalState = null;
+  if (nextTurn === 0) {
+    if (room.day >= (room.maxDays || 6)) {
+      finishGame(room);
+      modalState = { type: "finalResults" };
+    } else {
+      refreshTradingDay(room, "Все игроки сделали ход.");
+      modalState = null;
+    }
+  } else {
+    modalState = null;
+  }
   commit();
+}
+
+function finishGame(room) {
+  room.status = "finished";
+  room.finishedAt = new Date().toISOString();
+  room.finalRanking = [...room.players]
+    .sort((a, b) => scorePlayer(b) - scorePlayer(a))
+    .map((player, index) => ({ place: index + 1, playerId: player.id, name: player.name, score: scorePlayer(player) }));
+  room.log.unshift(`Партия завершена. Победитель: ${room.finalRanking[0]?.name || "не определен"}.`);
 }
 
 function nextDay() {
@@ -1710,6 +2017,7 @@ function nextDay() {
 }
 
 function refreshTradingDay(room, reason) {
+  room.players.forEach((player) => ageContracts(room, player));
   room.day += 1;
   room.marketCardIndex = (room.marketCardIndex + 1) % state.config.marketCards.length;
   room.market = createMarket(room);
@@ -1719,6 +2027,8 @@ function refreshTradingDay(room, reason) {
 
 function ageContracts(room, player) {
   player.activeContracts = (player.activeContracts || []).filter((contract) => {
+    contract.acceptedDay ??= room.day;
+    if (contract.acceptedDay >= room.day) return true;
     contract.duration = Math.max(0, (contract.duration || 1) - 1);
     if (contract.duration > 0) return true;
     player.failedContracts ||= [];
@@ -1753,7 +2063,7 @@ function takeDeal(kind, id) {
   if (!entity) return;
   const requirement = requirementGate(player, entity.requirement);
   if (requirement) return rejectAction(room, requirement);
-  const deal = cloneDeal(entity);
+  const deal = cloneDeal(entity, room);
   player.activeContracts.push(deal);
   markCommercialAction(room);
   room.log.unshift(`${player.name}: взял ${kind === "tenders" ? "тендер" : "контракт"} "${entity.title}".`);
@@ -1828,8 +2138,10 @@ function drawMarketCardFromCell() {
   if (!room || !player) return;
   const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["marketCard"] });
   if (gate) return rejectAction(room, gate);
+  const usedLogistics = clone(room.market.usedLogistics || { rail: 0, depot: 0 });
   room.marketCardIndex = (room.marketCardIndex + 1) % state.config.marketCards.length;
   room.market = createMarket(room);
+  room.market.usedLogistics = usedLogistics;
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   markCellAction(room);
   room.log.unshift(`${player.name}: открыл карту рынка "${marketCard.title}".`);
@@ -1846,14 +2158,16 @@ function brokerContract() {
   const contract = player.activeContracts[0];
   if (!contract) return rejectAction(room, "Для брокерки нужен активный контракт.");
   const fee = contract.brokerFee || Math.max(2, Math.floor((contract.income || 0) / 6));
-  player.money += fee;
+  const assetBonus = ownedAssetCount(player, "broker");
+  const proleumBonus = Number(room.turnState?.brokerBonus || 0);
+  player.money += fee + assetBonus + proleumBonus;
   player.influence += 1;
   contract.brokered = true;
   player.brokeredContracts.push(contract);
   player.completedContracts.push(contract);
   player.activeContracts = player.activeContracts.filter((item) => item.instanceId !== contract.instanceId);
   markCommercialAction(room);
-  room.log.unshift(`${player.name}: передал "${contract.title}" в брокерку и получил ${fee} млн комиссии.`);
+  room.log.unshift(`${player.name}: передал "${contract.title}" в брокерку и получил ${fee + assetBonus + proleumBonus} млн комиссии${assetBonus || proleumBonus ? `, включая бонусы +${assetBonus + proleumBonus}` : ""}.`);
   modalState = null;
   commit();
 }
@@ -1870,16 +2184,17 @@ function buyResource(code, amount = 1) {
   const capacityLeft = warehouseCapacity(player) - warehouseUsed(player);
   amount = Math.max(1, Math.min(amount, limit, capacityLeft, room.market.stock[code] || 0));
   if (!amount) return rejectAction(room, "Нет места на складе или ресурс закончился на рынке.");
-  const price = room.market.prices[code] || resourceMeta[code]?.basePrice || 0;
+  const supplierDiscount = Math.min(1, ownedAssetCount(player, "supplier"));
+  const price = Math.max(1, (room.market.prices[code] || resourceMeta[code]?.basePrice || 0) - supplierDiscount);
   const cost = price * amount;
   if (player.money < cost) {
-    room.log.unshift(`${player.name}: недостаточно капитала для покупки ${code}.`);
+    return rejectAction(room, `Для покупки ${code} x${amount} нужно ${cost} млн. Доступно: ${player.money} млн.`);
   } else {
     player.money -= cost;
     player.warehouse[code] = (player.warehouse[code] || 0) + amount;
     room.market.stock[code] = Math.max(0, (room.market.stock[code] || 0) - amount);
     markCommercialAction(room);
-    room.log.unshift(`${player.name}: купил ${code} x${amount} за ${cost} млн.`);
+    room.log.unshift(`${player.name}: купил ${code} x${amount} за ${cost} млн${supplierDiscount ? " со скидкой поставщика" : ""}.`);
   }
   modalState = null;
   commit();
@@ -1955,13 +2270,16 @@ function closeContract(contractId, routeKey) {
   player.money -= route.cost;
   const risk = resolveRisk(room, player, contract, route);
   const marketDelta = marketIncomeAdjustment(room, contract);
-  const finalIncome = Math.max(0, contract.income + marketDelta);
+  const clientBonus = Math.min(2, ownedAssetCount(player, "client"));
+  const proleumPenalty = Number(room.turnState?.proleumIncomePenalty || 0);
+  const finalIncome = Math.max(0, contract.income + marketDelta + clientBonus - proleumPenalty);
   player.money += finalIncome;
   applyContractBonus(player, contract, !risk.triggered);
   contract.closedRoute = route.title;
   contract.closedDay = room.day;
   contract.finalIncome = finalIncome;
   contract.marketDelta = marketDelta;
+  contract.assetIncomeBonus = clientBonus;
   player.completedContracts.push(contract);
   player.activeContracts.splice(index, 1);
   markCommercialAction(room);
@@ -1974,10 +2292,13 @@ function closeContract(contractId, routeKey) {
       income: finalIncome,
       logisticsCost: route.cost,
       marketDelta,
+      clientBonus,
+      proleumPenalty,
       risk: {
         level: risk.risk,
         dice: risk.dice,
         triggered: risk.triggered,
+        skipped: risk.skipped,
         penalty: risk.penalty,
         eventTitle: risk.eventCard?.title || "",
       },
@@ -1998,10 +2319,10 @@ function buyCellAsset(cellId) {
   if (player.assetPurchasedLap === player.lap) return rejectAction(room, "За один круг можно купить только один новый актив.");
   const cost = assetCostForCell(cell);
   if (player.money < cost) {
-    room.log.unshift(`${player.name}: недостаточно капитала для покупки "${cell.title}".`);
+    return rejectAction(room, `Для покупки "${cell.title}" нужно ${cost} млн. Доступно: ${player.money} млн.`);
   } else {
     player.money -= cost;
-    const owned = { id: uid("asset"), cellId, title: cell.title, type: cell.type, cost, ownerId: player.id, ownerName: player.name };
+    const owned = { id: uid("asset"), cellId, title: cell.title, type: cell.type, cost, ownerId: player.id, ownerName: player.name, effect: assetBenefitText(cell.type) };
     player.assets.push(owned);
     room.assetOwnership[cellId] = owned;
     player.assetPurchasedLap = player.lap;
@@ -2023,7 +2344,8 @@ function drawProleumCard() {
     room.log.unshift(`${player.name}: рука ПРОЛЕУМ уже заполнена.`);
     modalState = null;
   } else {
-    const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
+    const cardItem = state.config.proleumCards[room.proleumCardIndex % state.config.proleumCards.length];
+    room.proleumCardIndex = (room.proleumCardIndex + 1) % state.config.proleumCards.length;
     player.proleumCards.push(clone(cardItem));
     markCellAction(room);
     room.log.unshift(`${player.name}: взял карту ПРОЛЕУМ "${cardItem.title}".`);
@@ -2038,10 +2360,65 @@ function drawEventCard() {
   if (!room || !player) return;
   const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cells: ["event", "risk", "penalty", "pause"] });
   if (gate) return rejectAction(room, gate);
-  const eventCard = state.config.events[(room.log.length + room.day) % state.config.events.length];
+  const eventCard = state.config.events[room.eventCardIndex % state.config.events.length];
+  room.eventCardIndex = (room.eventCardIndex + 1) % state.config.events.length;
   markCellAction(room);
   modalState = { type: "eventChoice", title: eventCard.title, description: eventCard.description, eventId: eventCard.id };
   room.log.unshift(`${player.name}: открыл событие "${eventCard.title}".`);
+  commit();
+}
+
+function playProleumCard(cardId) {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const index = player.proleumCards.findIndex((card) => card.id === cardId);
+  const card = player.proleumCards[index];
+  if (!card) return;
+  const playability = proleumPlayability(room, player, card);
+  if (!playability.enabled) return rejectAction(room, playability.reason);
+  room.turnState = normalizeTurnState(room.turnState);
+  const title = card.title;
+  if (title === "Альтернативный базис найден") {
+    room.turnState.proleumRiskReduction += 1;
+    room.turnState.proleumLogisticsDiscount += 2;
+  } else if (title === "Экспресс-анализ риска") {
+    room.turnState.proleumRiskReduction += 1;
+  } else if (title === "Коммерческий компромисс") {
+    room.turnState.skipRisk = true;
+    room.turnState.proleumIncomePenalty += 2;
+  } else if (title === "Слот подтвержден") {
+    room.turnState.proleumLogisticsDiscount += 1;
+    room.turnState.proleumRiskReduction += 1;
+  } else if (title === "Сервисный коридор") {
+    room.turnState.proleumRiskReduction += 1;
+    room.turnState.proleumLogisticsDiscount += 1;
+  } else if (title === "Проверенный маршрут") {
+    room.turnState.proleumRiskReduction += 1;
+  } else if (title === "Брокерское сопровождение ПРОЛЕУМ") {
+    room.turnState.brokerBonus += 1;
+  } else if (title === "Приоритетное окно поставки") {
+    room.turnState.extraRail += 1;
+  }
+  room.turnState.proleumPlayed = true;
+  player.proleumCards.splice(index, 1);
+  room.log.unshift(`${player.name}: сыграл карту ПРОЛЕУМ "${card.title}".`);
+  modalState = { type: "cardReveal", kind: "proleum", label: "Карта сыграна", stamp: "Эффект активен до конца хода", card: clone(card) };
+  commit();
+}
+
+function activateLogisticsBonus(type) {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const cell = currentCell(room, player);
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["rail", "road", "depot"] });
+  if (gate || cell.type !== type) return rejectAction(room, gate || "Бонус не соответствует текущей клетке.");
+  room.turnState = normalizeTurnState(room.turnState);
+  room.turnState.logisticsBonus = type;
+  markCellAction(room);
+  room.log.unshift(`${player.name}: активировал разовый логистический бонус клетки "${cell.title}".`);
+  modalState = null;
   commit();
 }
 
@@ -2094,7 +2471,8 @@ function applySpecialCell() {
   if (gate) return rejectAction(room, gate);
   if (cell.type === "meeting") {
     if (player.proleumCards.length < (state.config.settings?.proleumHandLimit || 3)) {
-      const cardItem = state.config.proleumCards[(player.proleumCards.length + room.day) % state.config.proleumCards.length];
+      const cardItem = state.config.proleumCards[room.proleumCardIndex % state.config.proleumCards.length];
+      room.proleumCardIndex = (room.proleumCardIndex + 1) % state.config.proleumCards.length;
       player.proleumCards.push(clone(cardItem));
       room.log.unshift(`${player.name}: планерка дала карту ПРОЛЕУМ "${cardItem.title}".`);
       modalState = { type: "cardReveal", kind: "proleum", label: "Карта ПРОЛЕУМ", stamp: "Получена на планерке", card: clone(cardItem) };
