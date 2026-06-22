@@ -1246,7 +1246,7 @@ function modalMarkup() {
           ${owner ? `<span>Владелец: ${escapeHtml(owner.ownerName)}</span>` : `<span>Актив свободен</span>`}
         </div>
         ${cellActionMarkup(cell, myTurn)}
-        ${myTurn && standing && !room.turnState?.cellActionUsed ? `<button class="secondaryButton skipAction" data-action="skip-cell">Пропустить действие клетки</button>` : ""}
+        ${myTurn && standing && !room.turnState?.cellActionUsed && cell.type !== "claim" ? `<button class="secondaryButton skipAction" data-action="skip-cell">Пропустить действие клетки</button>` : ""}
       </section>
     </div>`;
   }
@@ -1433,6 +1433,29 @@ function cellActionMarkup(cell, myTurn) {
   if (["event", "risk", "penalty", "pause"].includes(cell.type)) {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["event", "risk", "penalty", "pause"] }) : "Недоступно.";
     return `<div class="decisionBox"><strong>Операционный выбор</strong><p>Откройте событие и выберите, как компания решит проблему.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-event" ${gate ? "disabled" : disabled}>Открыть событие</button></div>`;
+  }
+  if (cell.type === "claim") {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["claim"] }) : "Недоступно.";
+    const canPay = !gate && player.money >= 2;
+    const contracts = player.activeContracts || [];
+    return `<div class="decisionBox claimDecision">
+      <strong>Урегулирование претензии</strong>
+      <p>Выберите один вариант. Претензионный блок обязателен: завершить ход до решения нельзя.</p>
+      <div class="claimChoices">
+        <button class="primaryButton" data-claim-choice="pay" ${canPay ? "" : "disabled"}>
+          <strong>Заплатить 2 млн</strong><span>Сохранить коммерческое действие</span>
+        </button>
+        <button class="secondaryButton" data-claim-choice="lose-commercial" ${gate ? "disabled" : ""}>
+          <strong>Принять претензию</strong><span>Потерять коммерческое действие этого хода</span>
+        </button>
+        ${contracts.length
+          ? contracts.map((contract) => `<button class="secondaryButton" data-claim-choice="extend" data-contract-id="${contract.instanceId}" ${!gate && player.money >= 2 ? "" : "disabled"}>
+              <strong>Продлить: ${escapeHtml(contract.title)}</strong><span>-2 млн, срок +1 торговый день</span>
+            </button>`).join("")
+          : `<button class="secondaryButton" disabled><strong>Продлить контракт</strong><span>Нет активных контрактов</span></button>`}
+      </div>
+      ${gate ? `<small>${escapeHtml(gate)}</small>` : player.money < 2 ? `<small>Для платных вариантов нужно 2 млн. Доступен выбор с потерей коммерческого действия.</small>` : ""}
+    </div>`;
   }
   return `<div class="decisionBox"><strong>Служебная клетка</strong><p>Эта клетка влияет на темп партии и обновление торгового дня.</p></div>`;
 }
@@ -1648,6 +1671,9 @@ function bindCommon() {
   });
   document.querySelector("[data-action='broker-contract']")?.addEventListener("click", brokerContract);
   document.querySelector("[data-action='special-cell']")?.addEventListener("click", applySpecialCell);
+  document.querySelectorAll("[data-claim-choice]").forEach((button) =>
+    button.addEventListener("click", () => resolveClaimChoice(button.dataset.claimChoice, button.dataset.contractId)),
+  );
   document.querySelectorAll("[data-buy-hedge]").forEach((button) => button.addEventListener("click", () => buyHedge(button.dataset.buyHedge)));
   document.querySelectorAll("[data-play-proleum]").forEach((button) => button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -1981,6 +2007,10 @@ function endTurn() {
   const room = activeRoom();
   if (!room || !canUserAct(room) || !room.turnState?.rolled) return;
   const player = currentPlayer(room);
+  const cell = currentCell(room, player);
+  if (cell?.type === "claim" && !room.turnState?.cellActionUsed) {
+    return rejectAction(room, "Сначала урегулируйте претензионный блок.");
+  }
   room.log.unshift(`${player.name}: завершил ход.`);
   const nextTurn = (room.currentTurn + 1) % room.players.length;
   room.currentTurn = nextTurn;
@@ -1996,6 +2026,37 @@ function endTurn() {
   } else {
     modalState = null;
   }
+  commit();
+}
+
+function resolveClaimChoice(choice, contractId = "") {
+  const room = activeRoom();
+  const player = requireTurnPlayer();
+  if (!room || !player) return;
+  const cell = currentCell(room, player);
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["claim"] });
+  if (gate || cell.type !== "claim") return rejectAction(room, gate || "Вы не на претензионном блоке.");
+
+  if (choice === "pay") {
+    if (player.money < 2) return rejectAction(room, "Для урегулирования нужно 2 млн.");
+    player.money -= 2;
+    room.log.unshift(`${player.name}: урегулировал претензию за 2 млн и сохранил коммерческое действие.`);
+  } else if (choice === "lose-commercial") {
+    room.turnState.commercialActionUsed = true;
+    room.log.unshift(`${player.name}: принял претензию и потерял коммерческое действие этого хода.`);
+  } else if (choice === "extend") {
+    const contract = player.activeContracts.find((item) => item.instanceId === contractId);
+    if (!contract) return rejectAction(room, "Выбранный контракт больше не активен.");
+    if (player.money < 2) return rejectAction(room, "Для продления контракта нужно 2 млн.");
+    player.money -= 2;
+    contract.duration += 1;
+    room.log.unshift(`${player.name}: заплатил 2 млн и продлил "${contract.title}" на 1 торговый день.`);
+  } else {
+    return rejectAction(room, "Выберите способ урегулирования претензии.");
+  }
+
+  markCellAction(room);
+  modalState = null;
   commit();
 }
 

@@ -5200,6 +5200,45 @@ body:has(.gameShell) {
   color: var(--game-ink);
 }
 
+.claimChoices {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.claimChoices button {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  padding: 11px 14px;
+  text-align: left;
+}
+
+.claimChoices button strong {
+  font-size: 14px;
+}
+
+.claimChoices button span {
+  color: var(--game-muted);
+  font-size: 12px;
+}
+
+.claimChoices .primaryButton span {
+  color: rgba(18, 20, 17, 0.68);
+}
+
+.claimDecision {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(18, 20, 17, 0.13);
+}
+
+.claimDecision > p {
+  color: #4f5750;
+}
+
 @media (max-width: 1380px) {
   .topBarMain {
     grid-template-columns: 140px 64px minmax(150px, 1fr) auto auto;
