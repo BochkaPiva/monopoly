@@ -39,6 +39,12 @@ RLS включен. Для прототипа открыты политики н
   "updatedAt": "2026-06-22T00:00:00.000Z",
   "day": 1,
   "currentTurn": 0,
+  "turnStartedAt": "2026-06-22T00:00:00.000Z",
+  "turnDeadline": "2026-06-22T00:01:00.000Z",
+  "contractMarketIds": ["C-001", "C-002", "C-003", "C-004"],
+  "contractDeckCursor": 4,
+  "tenderMarketIds": ["T-01"],
+  "tenderDeckCursor": 1,
   "marketCardIndex": 0,
   "market": {
     "day": 1,

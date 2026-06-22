@@ -3875,6 +3875,538 @@ body:has(.gameShell) {
   }
 }
 
+.gameShell .playerDock .tabletStack {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(14px);
+  transition: max-height 260ms ease, padding 260ms ease, opacity 180ms ease, transform 260ms ease;
+}
+
+.gameShell .playerDock.open .tabletStack,
+.gameShell .playerDock:hover .tabletStack,
+.gameShell .playerDock:focus-within .tabletStack {
+  max-height: 310px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* Compact synchronized clock label beside the current-player caption. */
+.turnTimer span {
+  top: 12px !important;
+  right: auto !important;
+  left: 268px !important;
+  width: auto !important;
+  min-width: 34px !important;
+  padding: 1px 5px !important;
+  color: #6a736c;
+  background: rgba(255, 255, 255, 0.46);
+  border-color: rgba(18, 20, 17, 0.06);
+}
+
+@media (max-width: 1500px) {
+  .turnTimer span {
+    left: 236px !important;
+  }
+}
+
+.turnTimer span {
+  top: 12px;
+  right: auto;
+  left: 268px;
+  min-width: 34px;
+  padding: 1px 5px;
+  color: #6a736c;
+  background: rgba(255, 255, 255, 0.46);
+  border-color: rgba(18, 20, 17, 0.06);
+}
+
+@media (max-width: 1500px) {
+  .turnTimer span {
+    left: 236px;
+  }
+}
+
+/* Board workspace v3: synchronized turn clock, shared deal market, glass drawers. */
+.topBarMain {
+  grid-template-columns: 164px minmax(220px, 1fr) auto auto;
+}
+
+.turnTimer {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 3px;
+  overflow: visible;
+  background: rgba(18, 20, 17, 0.08);
+}
+
+.turnTimer i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #22a665 0%, #ffcc00 72%, #e26d5d 100%);
+  animation: none;
+  transition: width 240ms linear;
+}
+
+.turnTimer span {
+  position: absolute;
+  top: 9px;
+  right: 8px;
+  min-width: 38px;
+  padding: 3px 6px;
+  color: #596159;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(18, 20, 17, 0.08);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 850;
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+
+.turnTimer.urgent i {
+  background: linear-gradient(90deg, #ffcc00, #e75e50);
+}
+
+.turnTimer.expired i {
+  width: 0 !important;
+}
+
+.gameShell .board {
+  padding: 6px;
+}
+
+.boardCenter {
+  inset: 9.7%;
+  gap: 8px;
+  padding: 12px;
+}
+
+.boardLogo {
+  min-height: 38px;
+  padding-bottom: 7px;
+}
+
+.boardLogo .proleumLogo strong {
+  font-size: clamp(20px, 2vw, 31px);
+}
+
+.centerMarket.boardSummary {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+}
+
+.centerResourceBoard {
+  gap: 5px;
+}
+
+.centerResourceBoard > header {
+  min-height: 16px;
+}
+
+.centerTickerGrid {
+  gap: 6px;
+}
+
+.centerTicker {
+  min-height: 72px;
+  padding: 7px 8px;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+}
+
+.centerTicker .tickerCode {
+  font-size: clamp(19px, 1.65vw, 28px);
+}
+
+.centerTicker strong {
+  font-size: 13px;
+}
+
+.centerTicker span:not(.tickerCode),
+.centerTicker em,
+.centerTicker b {
+  font-size: 9px;
+}
+
+.centerDayBoard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.9fr);
+  grid-template-rows: 68px;
+  gap: 6px;
+}
+
+.centerDayBoard > .marketDayCard,
+.centerDayBoard > .centerLogistics {
+  grid-row: 1;
+}
+
+.centerDayBoard > .marketDayCard {
+  grid-column: 1;
+  min-height: 68px;
+  max-height: 68px;
+  padding: 9px 11px;
+}
+
+.marketDayCard strong {
+  font-size: 16px;
+}
+
+.marketDayCard small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.centerDayBoard > .centerLogistics {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.centerDayBoard .logisticMeter {
+  min-height: 68px;
+  padding: 8px;
+}
+
+.centerDayBoard .logisticMeter div {
+  align-items: baseline;
+}
+
+.centerDayBoard .logisticMeter strong {
+  font-size: 20px;
+}
+
+.centerDeals {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+  min-height: 0;
+  padding-top: 2px;
+}
+
+.centerDeals > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #f5f4ed;
+  font-size: 11px;
+}
+
+.centerDeals > header > strong {
+  color: #f5f4ed;
+  font-size: 12px !important;
+  line-height: 1.2;
+}
+
+.centerDeals > header span {
+  color: #858b82;
+  font-size: 9px;
+}
+
+.centerDealGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(64px, 1fr);
+  gap: 6px;
+  min-height: 0;
+  align-content: start;
+}
+
+.centerDealCard {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  color: #f4f3ed;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.centerDealCard:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 204, 0, 0.5);
+}
+
+.centerDealCard.isTender {
+  background: rgba(255, 204, 0, 0.07);
+  border-color: rgba(255, 204, 0, 0.3);
+}
+
+.centerDealCard > div {
+  min-width: 0;
+}
+
+.centerDealCard > div span {
+  display: block;
+  color: #d7ad0c;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.centerDealCard > div strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.15;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.centerDealCard p {
+  overflow: hidden;
+  margin: 0;
+  color: #9fa49c;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.centerDealCard footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+  align-items: center;
+}
+
+.centerDealCard footer span {
+  color: #c8cbc5;
+  font-size: 8px;
+}
+
+.centerDealCard footer button {
+  min-height: 23px;
+  padding: 3px 7px;
+  color: #11130f;
+  background: #ffcc00;
+  border: 0;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.centerDealCard footer button:disabled {
+  color: #8d8e87;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.boardCell {
+  gap: 2px;
+  align-content: start;
+  padding: 6px 6px 5px;
+}
+
+.boardCell .cellNumber {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  color: #758078;
+  font-size: 9px;
+}
+
+.boardCell .cellActionLabel {
+  display: block;
+  overflow: hidden;
+  margin: 0 0 1px 17px;
+  color: #9d7d00;
+  font-size: 7px;
+  font-weight: 950;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boardCell strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: clamp(8px, 0.62vw, 10px);
+  line-height: 1.08;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.boardCell.type-supplier .cellActionLabel,
+.boardCell.type-market .cellActionLabel {
+  color: #198657;
+}
+
+.boardCell.type-event .cellActionLabel,
+.boardCell.type-risk .cellActionLabel,
+.boardCell.type-claim .cellActionLabel,
+.boardCell.type-penalty .cellActionLabel,
+.boardCell.type-block .cellActionLabel {
+  color: #a33b33;
+}
+
+.boardCell.type-rail .cellActionLabel,
+.boardCell.type-road .cellActionLabel,
+.boardCell.type-depot .cellActionLabel {
+  color: #52646f;
+}
+
+.gameShell .playerDock {
+  filter: none;
+}
+
+.gameShell .dockHandle,
+.gameShell .tabletStack,
+.railStack {
+  background: rgba(255, 255, 255, 0.58);
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 -16px 50px rgba(35, 45, 37, 0.12);
+  backdrop-filter: blur(28px) saturate(135%);
+}
+
+.gameShell .playerTablet {
+  color: #172019;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.18)),
+    rgba(235, 241, 236, 0.5);
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.gameShell .tabletHeader > span {
+  color: #113322;
+  background: rgba(36, 169, 101, 0.16);
+  border: 1px solid rgba(36, 169, 101, 0.22);
+}
+
+.gameShell .tabletStats {
+  gap: 8px;
+}
+
+.gameShell .tabletStats span {
+  display: grid;
+  grid-template-columns: auto;
+  gap: 1px;
+  min-width: 82px;
+  min-height: 42px;
+  padding: 6px 9px;
+  color: #68736b;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.gameShell .tabletStats strong {
+  color: #172019;
+  font-size: 14px;
+}
+
+.gameShell .tabletWorkspace .tabletZone,
+.tabletDeal,
+.tabletMiniCard,
+.assetRow,
+.resourceChip,
+.tabletEmpty {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.gameShell .cardSlot {
+  color: #667069;
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(30, 45, 34, 0.12);
+}
+
+@media (max-width: 1500px) {
+  .topBarMain {
+    grid-template-columns: 140px minmax(150px, 1fr) auto auto;
+  }
+
+  .boardCenter {
+    inset: 9.6%;
+    padding: 9px;
+  }
+
+  .centerMarket.boardSummary {
+    grid-template-rows: 92px 102px minmax(0, 1fr);
+  }
+
+  .centerResourceBoard {
+    height: 92px;
+  }
+
+  .centerTicker {
+    height: 70px;
+    min-height: 70px;
+  }
+
+  .centerDayBoard {
+    grid-template-columns: 1fr;
+    grid-template-rows: 50px 46px;
+    height: 102px;
+  }
+
+  .centerDayBoard > .marketDayCard {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 50px;
+    max-height: 50px;
+  }
+
+  .centerDayBoard > .centerLogistics {
+    grid-column: 1;
+    grid-row: 2;
+    height: 46px;
+    grid-template-rows: 1fr;
+  }
+
+  .centerDayBoard .logisticMeter {
+    min-height: 46px;
+    height: 46px;
+  }
+
+  .centerDeals {
+    grid-template-rows: 18px minmax(0, 1fr);
+  }
+
+  .centerDeals > header span {
+    display: none;
+  }
+
+  .centerDealGrid {
+    grid-auto-rows: 64px;
+  }
+
+  .centerDealCard {
+    padding: 6px;
+  }
+
+  .centerDealCard > div strong {
+    font-size: 9px;
+  }
+
+  .centerDealCard p {
+    display: none;
+  }
+
+  .centerDealCard {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+}
+
 /* Player tablet rebuild: compact workbench without clipped nested controls */
 .gameShell .playerDock {
   left: 64px;
@@ -5383,5 +5915,391 @@ body:has(.gameShell) {
     grid-column: 3;
     justify-self: end;
     width: auto;
+  }
+}
+
+/* v3 final overrides must remain last in the cascade. */
+.topBarMain {
+  grid-template-columns: 164px minmax(220px, 1fr) auto auto;
+}
+
+.centerDeals > header > strong {
+  font-size: 12px !important;
+  line-height: 1.2;
+}
+
+@media (max-width: 1500px) {
+  .topBarMain {
+    grid-template-columns: 140px minmax(150px, 1fr) auto auto;
+  }
+
+  .centerMarket.boardSummary {
+    grid-template-rows: 92px 102px minmax(0, 1fr);
+  }
+
+  .centerResourceBoard {
+    height: 92px;
+    grid-template-rows: 16px 70px;
+  }
+
+  .centerTicker {
+    height: 70px;
+    min-height: 70px;
+  }
+
+  .centerDayBoard {
+    height: 102px;
+    grid-template-columns: 1fr;
+    grid-template-rows: 50px 46px;
+  }
+
+  .centerDayBoard > .marketDayCard,
+  .centerDayBoard .marketDayCard {
+    grid-column: 1;
+    grid-row: 1;
+    height: 50px;
+    min-height: 50px;
+    max-height: 50px;
+  }
+
+  .centerDayBoard > .centerLogistics {
+    grid-column: 1;
+    grid-row: 2;
+    height: 46px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 46px;
+  }
+
+  .centerDayBoard .logisticMeter {
+    height: 46px;
+    min-height: 46px;
+  }
+
+  .centerDeals {
+    grid-template-rows: 18px minmax(0, 1fr);
+  }
+
+  .centerDeals > header span {
+    display: none;
+  }
+
+  .centerDealGrid {
+    grid-auto-rows: 64px;
+  }
+
+  .centerDealCard {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .centerDealCard p {
+    display: none;
+  }
+}
+
+.gameShell .dockHandle,
+.gameShell .tabletStack,
+.railStack {
+  background: rgba(248, 251, 248, 0.62);
+  border-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(28px) saturate(135%);
+}
+
+.gameShell .playerTablet {
+  color: #172019;
+  background: rgba(242, 247, 243, 0.5);
+  border-color: rgba(255, 255, 255, 0.76);
+}
+
+.gameShell .tabletStats span {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+  min-width: 84px;
+  min-height: 42px;
+  padding: 6px 9px;
+  color: #69736b;
+  background: rgba(255, 255, 255, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.gameShell .tabletStats strong {
+  color: #172019;
+  font-size: 14px;
+}
+
+.gameShell .tabletWorkspace .tabletZone,
+.gameShell .tabletDeal,
+.gameShell .tabletMiniCard,
+.gameShell .assetRow,
+.gameShell .resourceChip,
+.gameShell .tabletEmpty,
+.gameShell .cardSlot {
+  color: #263129;
+  background: rgba(255, 255, 255, 0.34);
+  border-color: rgba(33, 48, 37, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+/* Sector board language and premium pieces. */
+.boardCell {
+  position: relative;
+  overflow: hidden;
+  padding-top: 18px;
+}
+
+.boardCell .sectorBand {
+  position: absolute;
+  z-index: 0;
+  background: var(--sector-color);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sector-color) 40%, transparent);
+}
+
+.boardCell:nth-child(-n + 11) .sectorBand {
+  inset: 0 0 auto;
+  height: 7px;
+}
+
+.boardCell:nth-child(n + 12):nth-child(-n + 20) .sectorBand {
+  inset: 0 auto 0 0;
+  width: 7px;
+}
+
+.boardCell:nth-child(n + 21):nth-child(-n + 31) .sectorBand {
+  inset: 0 0 auto;
+  height: 7px;
+}
+
+.boardCell:nth-child(n + 32):nth-child(-n + 40) .sectorBand {
+  inset: 0 0 0 auto;
+  width: 7px;
+}
+
+.boardCell .cellNumber,
+.boardCell .cellActionLabel,
+.boardCell > strong,
+.boardCell > em,
+.boardCell .tokens {
+  position: relative;
+  z-index: 1;
+}
+
+.boardCell .cellActionLabel {
+  color: var(--sector-color, #6c756e);
+  font-weight: 800;
+}
+
+.boardCell[class*="sector-contract"] {
+  background: color-mix(in srgb, var(--sector-color) 8%, rgba(255, 255, 255, 0.94));
+}
+
+.boardCell[class*="sector-resource"],
+.boardCell.sector-logistics-network,
+.boardCell.sector-service-network {
+  background: color-mix(in srgb, var(--sector-color) 7%, rgba(255, 255, 255, 0.95));
+}
+
+.tokens {
+  gap: 3px;
+}
+
+.tokens .tokenShape {
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--token-color) 68%, white), var(--token-color));
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(13, 21, 16, 0.34), inset 0 1px 2px rgba(255, 255, 255, 0.62);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.tokens .token-1 {
+  border-radius: 3px 9px 3px 9px;
+}
+
+.tokens .token-2 {
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+
+.tokens .token-3 {
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+.currentCell .tokenShape {
+  animation: token-arrive 650ms cubic-bezier(.2, .9, .25, 1);
+  filter: saturate(1.18);
+}
+
+@keyframes token-arrive {
+  0% { transform: translateY(-10px) scale(.72); opacity: .35; }
+  62% { transform: translateY(2px) scale(1.18); opacity: 1; }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.sectorInfo {
+  display: grid;
+  gap: 5px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  color: #263129;
+  background: color-mix(in srgb, var(--sector-color) 10%, rgba(255, 255, 255, 0.72));
+  border: 1px solid color-mix(in srgb, var(--sector-color) 32%, rgba(255, 255, 255, 0.76));
+  border-left: 5px solid var(--sector-color);
+  border-radius: 8px;
+}
+
+.sectorInfo span {
+  color: #667068;
+  font-size: 13px;
+}
+
+.sectorPortfolio {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.sectorProgress {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 27px;
+  padding: 4px 7px;
+  color: #667068;
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(31, 49, 37, 0.1);
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.sectorProgress i {
+  width: 7px;
+  height: 15px;
+  background: var(--sector-color);
+  border-radius: 2px;
+}
+
+.sectorProgress strong {
+  color: #202a23;
+}
+
+.sectorProgress.complete {
+  color: #172019;
+  background: color-mix(in srgb, var(--sector-color) 13%, rgba(255, 255, 255, 0.72));
+  border-color: color-mix(in srgb, var(--sector-color) 35%, transparent);
+}
+
+.sectorPortfolio {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sectorProgress span {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gameShell .assetsZone {
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+}
+
+.gameShell .assetsZone .assetShelf {
+  overflow: hidden;
+}
+
+.gameShell .tabletDeal,
+.gameShell .tabletDeal .miniDealCard header strong,
+.gameShell .tabletDeal footer,
+.gameShell .tabletDeal .miniDealMeta span,
+.gameShell .tabletDeal .resourceLine span {
+  color: #283229;
+}
+
+.gameShell .tabletDeal footer b,
+.gameShell .tabletWorkspace .tabletZone h4 {
+  color: #987500;
+}
+
+.gameShell .tabletDeal .progressTrack {
+  background: rgba(33, 48, 37, 0.12);
+}
+
+.gameShell .tabletDeal .progressTrack i {
+  background: linear-gradient(90deg, #d7ae28, #ffdc42);
+}
+
+.gameShell .tabletEmpty {
+  color: #4d5a50;
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(33, 48, 37, 0.16);
+}
+
+.gameShell .tabletEmpty small {
+  color: #7b847d;
+}
+
+@media (max-width: 1500px) {
+  .sectorProgress {
+    grid-template-columns: 5px minmax(0, 1fr) auto;
+    min-height: 22px;
+    padding: 2px 5px;
+  }
+
+  .sectorProgress i {
+    width: 5px;
+    height: 12px;
+  }
+
+  .sectorProgress span {
+    font-size: 8px;
+  }
+}
+
+/* Keep the company tablet hidden until hover, focus, or explicit pinning. */
+.gameShell .playerDock .tabletStack {
+  max-height: 0 !important;
+  border-width: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(14px);
+}
+
+.gameShell .playerDock.open .tabletStack,
+.gameShell .playerDock:hover .tabletStack,
+.gameShell .playerDock:focus-within .tabletStack {
+  max-height: 310px !important;
+  border-width: 1px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  opacity: 1 !important;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.gameShell > .topBar .turnTimer span {
+  top: 12px !important;
+  right: auto !important;
+  left: 268px !important;
+  width: auto !important;
+  min-width: 34px !important;
+  padding: 1px 5px !important;
+  color: #6a736c;
+  background: rgba(255, 255, 255, 0.46);
+  border-color: rgba(18, 20, 17, 0.06);
+}
+
+@media (max-width: 1500px) {
+  .gameShell > .topBar .turnTimer span {
+    left: 236px !important;
   }
 }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { defaultConfig, logisticsByPlayers, resourceMeta, resourceVolumesByPlayers } from "../src/game-data.js";
 
 const allCards = [
@@ -35,6 +36,17 @@ for (const [players, logistics] of Object.entries(logisticsByPlayers)) {
   assert.ok(logistics.rail > 0, `${players} players: rail capacity must be positive.`);
   assert.ok(logistics.depot > 0, `${players} players: depot capacity must be positive.`);
 }
+
+const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+assert.match(appSource, /const TURN_DURATION_MS = 60_000/, "Turn duration must remain server-state compatible and fixed at 60 seconds.");
+assert.match(appSource, /turnDeadline/, "The room must persist an absolute turn deadline.");
+assert.match(appSource, /function expireTurn/, "An expired turn must advance even when the active player left the page.");
+assert.match(appSource, /contractMarketIds/, "Contracts must use a shared market instead of a day slice.");
+assert.match(appSource, /replaceMarketDeal\(room, kind, entity\.id\)/, "Taking a deal must immediately replenish the shared market.");
+assert.match(appSource, /animatePlayerMove/, "Dice movement must animate through intermediate cells.");
+assert.match(appSource, /modalState = \{ type: "cell", cellId: cell\.id \}/, "Landing must open the cell action modal.");
+assert.match(appSource, /"logistics-network"/, "The board must preserve the logistics ownership sector.");
+assert.match(appSource, /logisticsMonopoly \? 0/, "Completing logistics must make route cost zero.");
 
 console.log(
   JSON.stringify(

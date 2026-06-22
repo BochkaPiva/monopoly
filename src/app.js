@@ -2,7 +2,102 @@ import { defaultConfig, logisticsByPlayers, resourceMeta, resourceVolumesByPlaye
 
 const STORAGE_KEY = "proleum-monopoly-state-v1";
 const SESSION_KEY = "proleum-monopoly-user-v1";
+const TURN_DURATION_MS = 60_000;
 const palette = ["#1f7a5a", "#b7791f", "#365f91", "#8a3ffc", "#a83c3c", "#475569"];
+const boardLayout = [
+  ["cell-1", "corner"],
+  ["cell-6", "resource-reg", "REG", { title: "Биржа REG", description: "Купить REG по текущей рыночной цене или приобрести актив закупочного сектора." }],
+  ["cell-11", "resource-reg", "REG", { title: "Оптовый поставщик REG", description: "Купить REG и получить возможность приобрести постоянную скидку сектора." }],
+  ["cell-3", "special"],
+  ["cell-8", "resource-prm", "PRM", { title: "Биржа PRM", description: "Купить PRM по текущей рыночной цене или приобрести актив закупочного сектора." }],
+  ["cell-14", "resource-prm", "PRM", { title: "Оптовый поставщик PRM", description: "Купить PRM и получить возможность приобрести постоянную скидку сектора." }],
+  ["cell-7", "special"],
+  ["cell-9", "resource-dtl", "DTL", { title: "Биржа DTL", description: "Купить DTL по текущей рыночной цене или приобрести актив закупочного сектора." }],
+  ["cell-13", "resource-dtl", "DTL", { title: "Оптовый поставщик DTL", description: "Купить DTL и получить возможность приобрести постоянную скидку сектора." }],
+  ["cell-33", "special"],
+  ["cell-10", "corner"],
+  ["cell-12", "logistics-network"],
+  ["cell-16", "logistics-network"],
+  ["cell-15", "logistics-network"],
+  ["cell-19", "special"],
+  ["cell-18", "logistics-network"],
+  ["cell-5", "logistics-network"],
+  ["cell-25", "logistics-network"],
+  ["cell-35", "logistics-network"],
+  ["cell-22", "special"],
+  ["cell-20", "corner"],
+  ["cell-4", "contract-local"],
+  ["cell-17", "contract-local"],
+  ["cell-37", "special", null, { type: "tender", title: "Открытый тендер", sourceType: "Тендер", description: "Выбрать тендер из открытой витрины и подать заявку." }],
+  ["cell-21", "contract-industry"],
+  ["cell-23", "contract-industry"],
+  ["cell-2", "contract-industry"],
+  ["cell-24", "contract-fleet"],
+  ["cell-36", "contract-fleet"],
+  ["cell-38", "contract-fleet"],
+  ["cell-30", "corner"],
+  ["cell-31", "service-network"],
+  ["cell-26", "special"],
+  ["cell-28", "special"],
+  ["cell-32", "service-network"],
+  ["cell-27", "special"],
+  ["cell-39", "special"],
+  ["cell-34", "service-network"],
+  ["cell-29", "special"],
+  ["cell-40", "special"],
+];
+const sectorMeta = {
+  "resource-reg": { title: "Закупка REG", short: "REG", color: "#d9544d", bonus: "Каждый актив снижает цену REG на 1 млн; полный сектор дает еще -1 млн." },
+  "resource-prm": { title: "Закупка PRM", short: "PRM", color: "#d55b9f", bonus: "Каждый актив снижает цену PRM на 1 млн; полный сектор дает еще -1 млн." },
+  "resource-dtl": { title: "Закупка DTL", short: "DTL", color: "#416aa6", bonus: "Каждый актив снижает цену DTL на 1 млн; полный сектор дает еще -1 млн." },
+  "logistics-network": { title: "Логистическая сеть", short: "Логистика", color: "#56bfc8", bonus: "Активы снижают стоимость маршрутов; полная сеть делает логистику бесплатной." },
+  "contract-local": { title: "Локальные клиенты", short: "Локальные", color: "#9b6947", bonus: "Каждый актив усиливает доход; полный сектор дает +2 млн к поставке." },
+  "contract-industry": { title: "Корпоративные клиенты", short: "Корпоративные", color: "#d7ae28", bonus: "Каждый актив усиливает доход; полный сектор дает +2 млн к поставке." },
+  "contract-fleet": { title: "Транспортные клиенты", short: "Транспорт", color: "#e58b32", bonus: "Каждый актив усиливает доход; полный сектор дает +2 млн к поставке." },
+  "service-network": { title: "Сервисный контур", short: "Сервис", color: "#3b8f66", bonus: "Каждый актив увеличивает брокерскую комиссию; полный сектор дает еще +2 млн." },
+};
+const boardShortTitles = {
+  "cell-1": "Старт",
+  "cell-6": "Биржа REG",
+  "cell-11": "Поставщик REG",
+  "cell-8": "Биржа PRM",
+  "cell-14": "Поставщик PRM",
+  "cell-9": "Биржа DTL",
+  "cell-13": "Поставщик DTL",
+  "cell-3": "Событие",
+  "cell-7": "Карта рынка",
+  "cell-10": "Претензия",
+  "cell-2": "Региональный клиент",
+  "cell-12": "ЖД: отправка",
+  "cell-16": "Нефтебаза МСК",
+  "cell-15": "ЖД: окно",
+  "cell-19": "Событие",
+  "cell-18": "Нефтебаза Волга",
+  "cell-5": "Автомаршрут",
+  "cell-25": "ЖД: мощность",
+  "cell-35": "ЖД: назначение",
+  "cell-22": "ПРОЛЕУМ",
+  "cell-20": "Переговоры",
+  "cell-4": "Небольшая АЗС",
+  "cell-17": "Заявка клиента",
+  "cell-37": "Открытый тендер",
+  "cell-21": "Промышленность",
+  "cell-23": "Агрохолдинг",
+  "cell-33": "ПРОЛЕУМ",
+  "cell-24": "Сеть АЗС",
+  "cell-36": "Автопарк",
+  "cell-38": "Крупный клиент",
+  "cell-30": "Блокировка",
+  "cell-31": "Коды клиента",
+  "cell-26": "Hedge REG",
+  "cell-28": "Рыночный шок",
+  "cell-32": "Брокерский контур",
+  "cell-27": "Hedge PRM",
+  "cell-39": "Событие",
+  "cell-34": "Комиссия",
+  "cell-29": "Hedge DTL",
+  "cell-40": "Премия к индексу",
+};
 const entityLabels = {
   boardCells: "Поле",
   contracts: "Контракты",
@@ -33,6 +128,7 @@ let marketOpen = false;
 let pushInFlight = false;
 let pushQueued = false;
 let localMutationUntil = 0;
+let expiringTurn = false;
 
 normalizeState(state);
 applyStartupRoute();
@@ -47,6 +143,7 @@ window.addEventListener("storage", (event) => {
 render();
 syncFromServer();
 window.setInterval(syncFromServer, 1800);
+window.setInterval(updateTurnClock, 250);
 
 function card(id, title, type, description, resource, routes, duration, income, risk, effect) {
   return { id, title, type, description, resource, routes, duration, income, risk, effect };
@@ -68,9 +165,123 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function arrangeBoardCells(cells = []) {
+  const byId = new Map(cells.map((cell) => [cell.id, cell]));
+  return boardLayout
+    .map(([id, sector, resourceCode, override], index) => {
+      const source = byId.get(id);
+      if (!source) return null;
+      return {
+        ...source,
+        ...(override || {}),
+        index: index + 1,
+        sector,
+        resourceCode: resourceCode || source.resourceCode || "",
+        sectorTitle: sectorMeta[sector]?.title || "",
+        sectorColor: sectorMeta[sector]?.color || "",
+        buyable: sectorMeta[sector] ? true : override?.buyable ?? source.buyable,
+      };
+    })
+    .filter(Boolean);
+}
+
 function deckWindow(collection = [], offset = 0, count = 1) {
   if (!collection.length || count <= 0) return [];
   return Array.from({ length: Math.min(count, collection.length) }, (_, index) => collection[(offset + index) % collection.length]);
+}
+
+function dealMarketKey(kind) {
+  return kind === "tenders" ? "tenderMarketIds" : "contractMarketIds";
+}
+
+function dealCursorKey(kind) {
+  return kind === "tenders" ? "tenderDeckCursor" : "contractDeckCursor";
+}
+
+function dealMarketSize(room, kind, config = state.config) {
+  const playerCount = String(Math.max(2, Math.min(6, room.players?.length || 2)));
+  return kind === "tenders"
+    ? config.settings?.tendersByPlayers?.[playerCount] || 1
+    : config.settings?.contractsByPlayers?.[playerCount] || 5;
+}
+
+function ensureDealMarket(room, kind, config = state.config) {
+  const collection = config[kind] || [];
+  const marketKey = dealMarketKey(kind);
+  const cursorKey = dealCursorKey(kind);
+  room[marketKey] ||= [];
+  room[cursorKey] ??= 0;
+  const targetSize = Math.min(dealMarketSize(room, kind, config), collection.length);
+  room[marketKey] = room[marketKey]
+    .filter((id, index, ids) => ids.indexOf(id) === index && collection.some((card) => card.id === id))
+    .slice(0, targetSize);
+  let attempts = 0;
+  while (room[marketKey].length < targetSize && attempts < collection.length * 2) {
+    const card = collection[room[cursorKey] % collection.length];
+    room[cursorKey] = (room[cursorKey] + 1) % Math.max(1, collection.length);
+    attempts += 1;
+    if (card && !room[marketKey].includes(card.id)) room[marketKey].push(card.id);
+  }
+  return room[marketKey].map((id) => collection.find((card) => card.id === id)).filter(Boolean);
+}
+
+function replaceMarketDeal(room, kind, takenId) {
+  const marketKey = dealMarketKey(kind);
+  room[marketKey] = (room[marketKey] || []).filter((id) => id !== takenId);
+  ensureDealMarket(room, kind);
+}
+
+function startTurnClock(room) {
+  room.turnStartedAt = new Date().toISOString();
+  room.turnDeadline = new Date(Date.now() + TURN_DURATION_MS).toISOString();
+}
+
+function turnRemainingMs(room) {
+  return Math.max(0, (Date.parse(room?.turnDeadline || "") || 0) - Date.now());
+}
+
+function updateTurnClock() {
+  const room = activeRoom();
+  if (!room) return;
+  const remaining = turnRemainingMs(room);
+  const ratio = Math.max(0, Math.min(1, remaining / TURN_DURATION_MS));
+  document.querySelectorAll("[data-turn-deadline]").forEach((timer) => {
+    timer.querySelector("i")?.style.setProperty("width", `${ratio * 100}%`);
+    const seconds = Math.ceil(remaining / 1000);
+    const label = timer.querySelector("span");
+    if (label) label.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    timer.classList.toggle("urgent", remaining > 0 && remaining <= 15_000);
+    timer.classList.toggle("expired", remaining <= 0);
+  });
+  if (remaining <= 0 && room.status === "active" && room.players.length && room.lastExpiredDeadline !== room.turnDeadline) {
+    expireTurn(room);
+  }
+}
+
+function expireTurn(room) {
+  if (expiringTurn || !room || room.lastExpiredDeadline === room.turnDeadline) return;
+  expiringTurn = true;
+  const expiredDeadline = room.turnDeadline;
+  const player = currentPlayer(room);
+  room.lastExpiredDeadline = expiredDeadline;
+  room.log.unshift(`${player?.name || "Игрок"}: время хода истекло.`);
+  const nextTurn = (room.currentTurn + 1) % room.players.length;
+  room.currentTurn = nextTurn;
+  room.turnState = normalizeTurnState();
+  startTurnClock(room);
+  if (nextTurn === 0) {
+    if (room.day >= (room.maxDays || 6)) {
+      finishGame(room);
+      modalState = { type: "finalResults" };
+    } else {
+      refreshTradingDay(room, "Завершен полный круг ходов.");
+      modalState = null;
+    }
+  } else {
+    modalState = null;
+  }
+  commit();
+  expiringTurn = false;
 }
 
 function loadState() {
@@ -222,6 +433,7 @@ function normalizeState(nextState) {
   if (!nextState.config || nextState.config.version !== defaultConfig.version) {
     nextState.config = clone(defaultConfig);
   }
+  nextState.config.boardCells = arrangeBoardCells(nextState.config.boardCells);
   nextState.rooms ||= [];
   nextState.deletedRoomIds ||= [];
   nextState.rooms.forEach((room) => {
@@ -233,6 +445,8 @@ function normalizeState(nextState) {
     room.status ||= "active";
     room.revision ||= 0;
     room.updatedAt ||= "";
+    room.turnStartedAt ||= new Date().toISOString();
+    room.turnDeadline ||= new Date(Date.now() + TURN_DURATION_MS).toISOString();
     room.marketCardIndex ||= 0;
     room.eventCardIndex ||= 0;
     room.proleumCardIndex ||= 0;
@@ -244,6 +458,8 @@ function normalizeState(nextState) {
     room.market ||= createMarket(room);
     normalizeMarket(room);
     room.players.forEach((player, index) => normalizePlayer(player, index));
+    ensureDealMarket(room, "contracts", nextState.config);
+    ensureDealMarket(room, "tenders", nextState.config);
   });
 }
 
@@ -404,6 +620,29 @@ function ownedAssetCount(player, type) {
   return (player.assets || []).filter((item) => item.type === type).length;
 }
 
+function sectorCells(sector) {
+  return state.config.boardCells.filter((cell) => cell.sector === sector && cell.buyable !== false);
+}
+
+function ownedSectorAssets(player, sector) {
+  const sectorIds = new Set(sectorCells(sector).map((cell) => cell.id));
+  return (player.assets || []).filter((asset) => sectorIds.has(asset.cellId));
+}
+
+function ownsSector(player, sector) {
+  const cells = sectorCells(sector);
+  return cells.length > 0 && ownedSectorAssets(player, sector).length === cells.length;
+}
+
+function completedContractSectors(player) {
+  return ["contract-local", "contract-industry", "contract-fleet"].filter((sector) => ownsSector(player, sector)).length;
+}
+
+function resourceAssetDiscount(player, code) {
+  const sector = code === "PRM" ? "resource-prm" : code === "DTL" ? "resource-dtl" : "resource-reg";
+  return Math.min(2, ownedSectorAssets(player, sector).length) + (ownsSector(player, sector) ? 1 : 0);
+}
+
 function assetBenefitText(type) {
   const benefits = {
     supplier: "Скидка 1 млн на каждый жетон при закупке ресурса.",
@@ -492,6 +731,7 @@ function routeOptions(room, contract, player = userPlayer(room) || currentPlayer
   const availableDepot = Math.max(0, (market.logistics.depot || 0) - (market.usedLogistics.depot || 0));
   const allowed = contract.routes || [];
   const turnBonus = room.turnState?.logisticsBonus;
+  const logisticsMonopoly = ownsSector(player, "logistics-network");
   const roadDiscount = Math.min(1, ownedAssetCount(player, "road")) + (turnBonus === "road" ? 1 : 0);
   const railDiscount = Math.min(2, ownedAssetCount(player, "rail")) + (turnBonus === "rail" ? 1 : 0);
   const depotDiscount = turnBonus === "depot" ? 1 : 0;
@@ -499,15 +739,24 @@ function routeOptions(room, contract, player = userPlayer(room) || currentPlayer
   const options = [];
 
   if (allowed.some((route) => route.includes("Авто")) && total <= 2) {
-    options.push({ key: "auto", title: "Авто", cost: Math.max(1, total - roadDiscount - proleumDiscount), rail: 0, depot: 0, risk: 0, available: true, note: roadDiscount || proleumDiscount ? "Тактическая скидка применена." : "Быстро, без общей мощности, только малые поставки." });
+    options.push({
+      key: "auto",
+      title: "Авто",
+      cost: logisticsMonopoly ? 0 : Math.max(1, total - roadDiscount - proleumDiscount),
+      rail: 0,
+      depot: 0,
+      risk: 0,
+      available: true,
+      note: logisticsMonopoly ? "Полная логистическая сеть: маршрут бесплатный." : roadDiscount || proleumDiscount ? "Тактическая скидка применена." : "Быстро, без общей мощности, только малые поставки.",
+    });
   }
   if (allowed.some((route) => route === "ЖД" || route.includes("ЖД"))) {
-    const cost = Math.max(1, 2 + Math.ceil(total / 2) - railDiscount - proleumDiscount);
-    options.push({ key: "rail", title: "ЖД", cost, rail: 1, depot: 0, risk: turnBonus === "rail" ? 0 : 1, available: availableRail >= 1, note: railDiscount ? "Скидка ЖД-актива или клетки применена." : "Дешевле на объеме, но повышает операционный риск." });
+    const cost = logisticsMonopoly ? 0 : Math.max(1, 2 + Math.ceil(total / 2) - railDiscount - proleumDiscount);
+    options.push({ key: "rail", title: "ЖД", cost, rail: 1, depot: 0, risk: turnBonus === "rail" || logisticsMonopoly ? 0 : 1, available: availableRail >= 1, note: logisticsMonopoly ? "Полная логистическая сеть: маршрут бесплатный и не добавляет риск." : railDiscount ? "Скидка ЖД-актива или клетки применена." : "Дешевле на объеме, но повышает операционный риск." });
   }
   if (allowed.some((route) => route.toLowerCase().includes("нефтебаза"))) {
-    const cost = Math.max(1, 3 + Math.ceil(total / 2) - railDiscount - depotDiscount - proleumDiscount);
-    options.push({ key: "rail-depot", title: "ЖД + нефтебаза", cost, rail: 1, depot: 1, risk: 0, available: availableRail >= 1 && availableDepot >= 1, note: depotDiscount ? "Бонус нефтебазы применен." : "Надежнее для крупных сделок, занимает две мощности." });
+    const cost = logisticsMonopoly ? 0 : Math.max(1, 3 + Math.ceil(total / 2) - railDiscount - depotDiscount - proleumDiscount);
+    options.push({ key: "rail-depot", title: "ЖД + нефтебаза", cost, rail: 1, depot: 1, risk: 0, available: availableRail >= 1 && availableDepot >= 1, note: logisticsMonopoly ? "Полная логистическая сеть: маршрут бесплатный." : depotDiscount ? "Бонус нефтебазы применен." : "Надежнее для крупных сделок, занимает две мощности." });
   }
 
   return options;
@@ -588,6 +837,7 @@ function render() {
       </main>
     </div>`;
   bindCommon();
+  window.requestAnimationFrame(updateTurnClock);
 }
 
 function loginMarkup() {
@@ -673,17 +923,13 @@ function gameMarkup(room) {
   const selected = state.config.boardCells.find((cell) => cell.id === room.selectedEntityId) || state.config.boardCells[acting?.position || 0] || state.config.boardCells[0];
   const contractReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["contract", "client"] }) : "Вы не в комнате.";
   const tenderReason = mine ? actionGate(room, mine, { requiresRolled: true, commercial: true, cells: ["tender"] }) : "Вы не в комнате.";
-  const playerCount = String(Math.max(2, Math.min(6, room.players.length || 2)));
-  const openContracts = state.config.settings?.contractsByPlayers?.[playerCount] || 5;
-  const openTenders = state.config.settings?.tendersByPlayers?.[playerCount] || 1;
-  const contracts = deckWindow(state.config.contracts, (room.day - 1) * openContracts, openContracts);
-  const tenders = deckWindow(state.config.tenders, (room.day - 1) * openTenders, openTenders);
+  const contracts = ensureDealMarket(room, "contracts");
+  const tenders = ensureDealMarket(room, "tenders");
   return `
     <section class="gameLayout gameShell">
       ${topBarMarkup(room, selected)}
       ${playerRailMarkup(room)}
-      <div class="boardPanel">${boardMarkup(room)}</div>
-      ${marketTerminalMarkup(room, contracts, tenders, contractReason, tenderReason)}
+      <div class="boardPanel">${boardMarkup(room, contracts, tenders, contractReason, tenderReason)}</div>
       ${playerDockMarkup(room)}
       ${sidePanelMarkup(room)}
     </section>`;
@@ -710,10 +956,9 @@ function topBarMarkup(room, selected) {
   const incomingTrades = room.tradeOffers.filter((offer) => offer.status === "pending" && offer.buyerName === user.name);
   const canNegotiate = canUserAct(room) && turnState.rolled && !turnState.negotiationUsed && room.players.length > 1;
   return `<header class="topBar" data-turn="${room.currentTurn}-${room.day}">
-    <div class="turnTimer"><i></i></div>
+    <div class="turnTimer" data-turn-deadline="${escapeHtml(room.turnDeadline || "")}"><i style="width:${Math.max(0, Math.min(100, (turnRemainingMs(room) / TURN_DURATION_MS) * 100))}%"></i><span>${Math.ceil(turnRemainingMs(room) / 1000)}</span></div>
     <div class="topBarMain">
       ${proleumLogo}
-      <div class="dayBadge"><span>Торговый день</span><strong>${room.day}</strong></div>
       <div class="turnIdentity">
         <span class="kicker">Текущий ход</span>
         <h2>${escapeHtml(actingPlayer?.name || "Нет игроков")}</h2>
@@ -740,12 +985,13 @@ function topBarMarkup(room, selected) {
   </header>`;
 }
 
-function boardMarkup(room) {
+function boardMarkup(room, openContracts, openTenders, contractReason, tenderReason) {
   normalizeMarket(room);
   const market = room.market;
   const marketCard = state.config.marketCards[room.marketCardIndex % state.config.marketCards.length];
   const player = currentPlayer(room);
   const resourceReason = userPlayer(room) ? actionGate(room, userPlayer(room), { requiresRolled: true, commercial: true, cells: ["supplier", "market"] }) : "Вы не в комнате.";
+  const resourceCell = userPlayer(room) ? currentCell(room, userPlayer(room)) : null;
   return `
     <div class="board">
       ${state.config.boardCells
@@ -753,12 +999,13 @@ function boardMarkup(room) {
           const players = room.players.filter((player) => player.position === index);
           const owner = room.assetOwnership?.[cell.id];
           const isStanding = player?.position === index;
-          const shortTitle = cell.title.length > 34 ? `${cell.title.slice(0, 31)}...` : cell.title;
-          return `<button class="boardCell type-${cell.type} ${owner ? "ownedCell" : ""} ${isStanding ? "currentCell" : ""}" data-cell="${cell.id}">
+          const actionLabel = cellActionLabel(cell.type);
+          return `<button class="boardCell type-${cell.type} sector-${cell.sector || "special"} ${owner ? "ownedCell" : ""} ${isStanding ? "currentCell" : ""}" data-cell="${cell.id}" style="--sector-color:${cell.sectorColor || "#a9aaa7"}">
+            ${cell.sectorColor ? `<span class="sectorBand" aria-hidden="true"></span>` : ""}
             ${owner ? `<i class="ownerStrip" style="background:${owner.ownerId ? room.players.find((item) => item.id === owner.ownerId)?.color || "#ffcc00" : "#ffcc00"}"></i>` : ""}
-            <span>${index + 1}</span><strong title="${escapeHtml(cell.title)}">${escapeHtml(shortTitle)}</strong>
+            <span class="cellNumber">${index + 1}</span><small class="cellActionLabel">${escapeHtml(actionLabel)}</small><strong title="${escapeHtml(cell.title)}">${escapeHtml(boardShortTitles[cell.id] || cell.title)}</strong>
             ${owner ? `<em>${escapeHtml(owner.ownerName)}</em>` : ""}
-            <div class="tokens">${players.map((player) => `<i style="background:${player.color}" title="${escapeHtml(player.name)}"></i>`).join("")}</div>
+            <div class="tokens">${players.map((player, tokenIndex) => `<i class="tokenShape token-${tokenIndex % 4}" style="--token-color:${player.color}" title="${escapeHtml(player.name)}"></i>`).join("")}</div>
           </button>`;
         })
         .join("")}
@@ -768,7 +1015,7 @@ function boardMarkup(room) {
           <section class="centerResourceBoard">
             <header><span>Рынок ресурсов</span><strong>Цена / остаток</strong></header>
             <div class="centerTickerGrid">
-              ${Object.entries(resourceMeta).map(([code, meta]) => resourceTickerMarkup(code, meta, market, resourceReason, "centerTicker")).join("")}
+              ${Object.entries(resourceMeta).map(([code, meta]) => resourceTickerMarkup(code, meta, market, resourceReason || (resourceCell?.resourceCode && resourceCell.resourceCode !== code ? `На текущей клетке доступен только ${resourceCell.resourceCode}.` : ""), "centerTicker")).join("")}
             </div>
           </section>
           <section class="centerDayBoard">
@@ -782,9 +1029,57 @@ function boardMarkup(room) {
               ${logisticMeter("Нефтебаза", market.logistics.depot, market.usedLogistics.depot)}
             </div>
           </section>
+          ${centerDealsMarkup(openContracts, openTenders, contractReason, tenderReason)}
         </div>
       </div>
     </div>`;
+}
+
+function cellActionLabel(type) {
+  const labels = {
+    start: "СТАРТ",
+    supplier: "РЕСУРСЫ",
+    market: "РЕСУРСЫ",
+    contract: "КОНТРАКТ",
+    client: "КЛИЕНТ",
+    tender: "ТЕНДЕР",
+    proleum: "КАРТА",
+    marketCard: "РЫНОК",
+    hedge: "ХЕДЖ",
+    broker: "БРОКЕР",
+    rail: "ЖД",
+    road: "АВТО",
+    depot: "БАЗА",
+    event: "СОБЫТИЕ",
+    risk: "РИСК",
+    penalty: "ШТРАФ",
+    pause: "ПРОСТОЙ",
+    claim: "ПРЕТЕНЗИЯ",
+    block: "БЛОК",
+    meeting: "ПРОЛЕУМ",
+    asset: "АКТИВ",
+  };
+  return labels[type] || "ДЕЙСТВИЕ";
+}
+
+function centerDealsMarkup(contracts, tenders, contractReason, tenderReason) {
+  return `<section class="centerDeals">
+    <header><strong>Открытые сделки</strong><span>Взятая карта сразу заменяется следующей из колоды</span></header>
+    <div class="centerDealGrid">
+      ${contracts.map((contract) => centerDealCardMarkup(contract, "contract", contractReason)).join("")}
+      ${tenders.map((tender) => centerDealCardMarkup(tender, "tender", tenderReason)).join("")}
+    </div>
+  </section>`;
+}
+
+function centerDealCardMarkup(deal, kind, reason) {
+  const resource = Object.entries(deal.resource || {}).map(([code, amount]) => `${code}×${amount}`).join(" · ");
+  const routes = (deal.routes || []).map((route) => route.replace("ЖД + нефтебаза", "ЖД+база")).join(" / ");
+  return `<article class="centerDealCard ${kind === "tender" ? "isTender" : ""}" data-open-card="${kind === "tender" ? "tender" : "market"}:${deal.id}">
+    <div><span>${kind === "tender" ? "Тендер" : deal.type}</span><strong>${escapeHtml(deal.title)}</strong></div>
+    <p>${escapeHtml(resource)}${routes ? ` · ${escapeHtml(routes)}` : ""}</p>
+    <footer><span>${deal.income || 0} млн · ${deal.duration || 0} дн.</span><button data-${kind === "tender" ? "take-tender" : "take-contract"}="${deal.id}" ${reason ? "disabled" : ""} title="${escapeHtml(reason || "")}">${kind === "tender" ? "Заявиться" : "Взять"}</button></footer>
+  </article>`;
 }
 
 function resourceTickerMarkup(code, meta, market, resourceReason, className = "tickerRow") {
@@ -917,6 +1212,13 @@ function playerTabletMarkup(room, player, isCurrent) {
   const hedgeSlots = (player.hedgeTokens || [])
     .map((token, index) => `<button class="hedgeChip" data-open-card="hedge:${index}"><span>Hedge</span><strong>${token.resource} x${token.volume || 2}</strong></button>`)
     .join("");
+  const sectorProgress = Object.entries(sectorMeta)
+    .map(([sector, meta]) => {
+      const total = sectorCells(sector).length;
+      const owned = ownedSectorAssets(player, sector).length;
+      return `<div class="sectorProgress ${owned === total && total ? "complete" : ""}" style="--sector-color:${meta.color}" title="${escapeHtml(`${meta.title}: ${meta.bonus}`)}"><i></i><span>${escapeHtml(meta.short || meta.title)}</span><strong>${owned}/${total}</strong></div>`;
+    })
+    .join("");
   return `<article class="playerTablet ${isCurrent ? "current" : ""}">
     <header class="tabletHeader">
       <div><i style="background:${player.color}"></i><strong>${escapeHtml(player.name)}</strong></div>
@@ -942,6 +1244,7 @@ function playerTabletMarkup(room, player, isCurrent) {
       </section>
       <section class="tabletZone assetsZone">
         <header><h4>Активы компании</h4><span>${player.assets.length}</span></header>
+        <div class="sectorPortfolio">${sectorProgress}</div>
         <div class="assetShelf">${assetSlots}</div>
         <div class="tabletHistory"><span>Закрыто ${player.completedContracts.length}</span><span>Сорвано ${player.failedContracts?.length || 0}</span><span>Круг ${player.lap || 0}</span></div>
       </section>
@@ -1245,6 +1548,7 @@ function modalMarkup() {
           <span>${standing ? "Вы стоите на этой клетке" : "Действия доступны только текущему игроку на своей клетке"}</span>
           ${owner ? `<span>Владелец: ${escapeHtml(owner.ownerName)}</span>` : `<span>Актив свободен</span>`}
         </div>
+        ${cell.sectorTitle ? `<div class="sectorInfo" style="--sector-color:${cell.sectorColor}"><strong>${escapeHtml(cell.sectorTitle)}</strong><span>${escapeHtml(sectorMeta[cell.sector]?.bonus || "")}</span></div>` : ""}
         ${cellActionMarkup(cell, myTurn)}
         ${myTurn && standing && !room.turnState?.cellActionUsed && cell.type !== "claim" ? `<button class="secondaryButton skipAction" data-action="skip-cell">Пропустить действие клетки</button>` : ""}
       </section>
@@ -1351,13 +1655,12 @@ function cellActionMarkup(cell, myTurn) {
   if (["supplier", "market"].includes(cell.type)) {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["supplier", "market"] }) : "Недоступно.";
     const owner = room?.assetOwnership?.[cell.id];
-    const assetGate = cell.type === "supplier" && room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["supplier"] }) : "Недоступно.";
+    const assetGate = cell.buyable && room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["supplier", "market"] }) : "Недоступно.";
     const assetReason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : assetGate;
+    const availableResources = cell.resourceCode ? [cell.resourceCode] : Object.keys(resourceMeta);
     return `<div class="modalActions">
-      <button class="secondaryButton" data-buy-resource="REG" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить REG</button>
-      <button class="secondaryButton" data-buy-resource="PRM" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить PRM</button>
-      <button class="secondaryButton" data-buy-resource="DTL" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить DTL</button>
-      ${cell.type === "supplier" ? `<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${assetReason ? "disabled" : disabled} title="${escapeHtml(assetReason)}">Купить поставщика за ${assetCostForCell(cell)} млн</button>` : ""}
+      ${availableResources.map((code) => `<button class="secondaryButton" data-buy-resource="${code}" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Купить ${code}</button>`).join("")}
+      ${cell.buyable ? `<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${assetReason ? "disabled" : disabled} title="${escapeHtml(assetReason)}">Купить актив сектора за ${assetCostForCell(cell)} млн</button>` : ""}
     </div>`;
   }
   if (cell.type === "marketCard") {
@@ -1383,7 +1686,7 @@ function cellActionMarkup(cell, myTurn) {
     const price = assetCostForCell(cell);
     const reason = owner ? `Актив уже принадлежит ${owner.ownerName}.` : player?.assetPurchasedLap === player?.lap ? "За круг уже куплен один актив." : assetGate;
     return `<div class="decisionBox"><strong>Клиентский сегмент</strong><p>Клетка дает доступ к контрактам и может стать долгосрочным активом.</p>
-      <div class="modalActions">${deckWindow(state.config.contracts, (room.day - 1) * 3, 3)
+      <div class="modalActions">${ensureDealMarket(room, "contracts").slice(0, 3)
         .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${contractGate ? "disabled" : disabled} title="${escapeHtml(contractGate)}">${escapeHtml(item.title)}</button>`)
         .join("")}</div>
       ${reason ? `<small>${escapeHtml(reason)}</small>` : ""}<button class="primaryButton" data-buy-cell-asset="${cell.id}" ${reason ? "disabled" : disabled}>Купить сегмент за ${price} млн</button></div>`;
@@ -1415,14 +1718,13 @@ function cellActionMarkup(cell, myTurn) {
   }
   if (cell.type === "contract") {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["contract"] }) : "Недоступно.";
-    return `<div class="modalActions">${deckWindow(state.config.contracts, (room.day - 1) * 3, 3)
+    return `<div class="modalActions">${ensureDealMarket(room, "contracts").slice(0, 3)
       .map((item) => `<button class="secondaryButton" data-take-contract="${item.id}" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">${escapeHtml(item.title)}</button>`)
       .join("")}</div>`;
   }
   if (cell.type === "tender") {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, commercial: true, cellId: cell.id, cells: ["tender"] }) : "Недоступно.";
-    return `<div class="modalActions">${state.config.tenders
-      .slice(0, 1)
+    return `<div class="modalActions">${ensureDealMarket(room, "tenders")
       .map((item) => `<button class="primaryButton" data-take-tender="${item.id}" ${gate ? "disabled" : disabled} title="${escapeHtml(gate)}">Заявиться на тендер</button>`)
       .join("")}</div>`;
   }
@@ -1433,6 +1735,11 @@ function cellActionMarkup(cell, myTurn) {
   if (["event", "risk", "penalty", "pause"].includes(cell.type)) {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["event", "risk", "penalty", "pause"] }) : "Недоступно.";
     return `<div class="decisionBox"><strong>Операционный выбор</strong><p>Откройте событие и выберите, как компания решит проблему.</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="draw-event" ${gate ? "disabled" : disabled}>Открыть событие</button></div>`;
+  }
+  if (["block", "meeting"].includes(cell.type)) {
+    const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["block", "meeting"] }) : "Недоступно.";
+    const label = cell.type === "meeting" ? "Провести планерку" : "Разрешить блокировку";
+    return `<div class="decisionBox"><strong>${cell.type === "meeting" ? "Планерка участников рынка" : "Блокировка поставки"}</strong><p>${escapeHtml(cell.description)}</p>${gate ? `<small>${escapeHtml(gate)}</small>` : ""}<button class="primaryButton" data-action="special-cell" ${gate ? "disabled" : disabled}>${label}</button></div>`;
   }
   if (cell.type === "claim") {
     const gate = room && player ? actionGate(room, player, { requiresRolled: true, cellAction: true, cellId: cell.id, cells: ["claim"] }) : "Недоступно.";
@@ -1718,7 +2025,10 @@ function createRoom(name, mode = "Standard") {
     assetOwnership: {},
     log: [`${user.name} создал комнату.`],
   };
+  startTurnClock(room);
   room.market = createMarket(room);
+  ensureDealMarket(room, "contracts");
+  ensureDealMarket(room, "tenders");
   return room;
 }
 
@@ -1822,6 +2132,8 @@ function joinRoom(roomId) {
   if (!room) return;
   if (!room.players.some((player) => player.name === user.name)) {
     room.players.push(createPlayer(user.name, room.players.length));
+    ensureDealMarket(room, "contracts");
+    ensureDealMarket(room, "tenders");
     room.log.unshift(`${user.name} вошел в комнату.`);
   }
 }
@@ -1856,7 +2168,10 @@ function leaveRoom(roomId) {
   } else {
     if (playerIndex < room.currentTurn) room.currentTurn -= 1;
     if (room.currentTurn >= room.players.length) room.currentTurn = 0;
-    if (wasCurrent) room.turnState = normalizeTurnState();
+    if (wasCurrent) {
+      room.turnState = normalizeTurnState();
+      startTurnClock(room);
+    }
     if (room.ownerName === leavingPlayer.name) room.ownerName = room.players[0].name;
     room.log.unshift(`${leavingPlayer.name} покинул комнату${wasCurrent ? "; ход передан следующему игроку" : ""}.`);
   }
@@ -1979,28 +2294,46 @@ function roll() {
   const a = Math.ceil(Math.random() * 6);
   const b = Math.ceil(Math.random() * 6);
   const value = a + b;
-  diceState = { a, b, player: player.name };
+  diceState = { a, b, player: player.name, step: 0, total: value };
   render();
-  window.setTimeout(() => {
-    const freshRoom = activeRoom();
-    if (!freshRoom) return;
-    const freshPlayer = currentPlayer(freshRoom);
-    if (!freshPlayer || freshPlayer.name !== player.name) return;
+  window.setTimeout(() => animatePlayerMove(room.id, player.id, value, 0), 650);
+}
+
+function animatePlayerMove(roomId, playerId, total, step) {
+  const freshRoom = state.rooms.find((room) => room.id === roomId);
+  const freshPlayer = freshRoom?.players.find((player) => player.id === playerId);
+  if (!freshRoom || !freshPlayer || currentPlayer(freshRoom)?.id !== playerId) {
+    diceState = null;
+    render();
+    return;
+  }
+  if (step < total) {
     const previous = freshPlayer.position;
-    freshPlayer.position = (freshPlayer.position + value) % 40;
+    freshPlayer.position = (freshPlayer.position + 1) % 40;
     if (freshPlayer.position < previous) {
       freshPlayer.lap = (freshPlayer.lap || 0) + 1;
       freshPlayer.money += 2;
       freshRoom.log.unshift(`${freshPlayer.name}: прошел старт и получил 2 млн оборотного бонуса.`);
     }
+    freshRoom.selectedEntityId = state.config.boardCells[freshPlayer.position].id;
+    diceState = { ...diceState, step: step + 1, total };
+    render();
+    window.setTimeout(() => animatePlayerMove(roomId, playerId, total, step + 1), 115);
+    return;
+  }
+  window.setTimeout(() => {
+    const freshRoom = activeRoom();
+    if (!freshRoom) return;
+    const freshPlayer = currentPlayer(freshRoom);
+    if (!freshPlayer || freshPlayer.id !== playerId) return;
     const cell = state.config.boardCells[freshPlayer.position];
     freshRoom.selectedEntityId = cell.id;
     freshRoom.turnState = normalizeTurnState({ rolled: true, promptDismissed: true });
-    freshRoom.log.unshift(`${freshPlayer.name}: бросок ${value}, клетка "${cell.title}".`);
-    modalState = null;
+    freshRoom.log.unshift(`${freshPlayer.name}: бросок ${total}, клетка "${cell.title}".`);
+    modalState = { type: "cell", cellId: cell.id };
     diceState = null;
     commit();
-  }, 850);
+  }, 180);
 }
 
 function endTurn() {
@@ -2015,6 +2348,7 @@ function endTurn() {
   const nextTurn = (room.currentTurn + 1) % room.players.length;
   room.currentTurn = nextTurn;
   room.turnState = normalizeTurnState();
+  startTurnClock(room);
   if (nextTurn === 0) {
     if (room.day >= (room.maxDays || 6)) {
       finishGame(room);
@@ -2122,10 +2456,12 @@ function takeDeal(kind, id) {
   }
   const entity = state.config[kind].find((item) => item.id === id);
   if (!entity) return;
+  if (!ensureDealMarket(room, kind).some((item) => item.id === id)) return rejectAction(room, "Эта карта уже взята другим игроком. Витрина обновлена.");
   const requirement = requirementGate(player, entity.requirement);
   if (requirement) return rejectAction(room, requirement);
   const deal = cloneDeal(entity, room);
   player.activeContracts.push(deal);
+  replaceMarketDeal(room, kind, entity.id);
   markCommercialAction(room);
   room.log.unshift(`${player.name}: взял ${kind === "tenders" ? "тендер" : "контракт"} "${entity.title}".`);
   modalState = {
@@ -2219,7 +2555,7 @@ function brokerContract() {
   const contract = player.activeContracts[0];
   if (!contract) return rejectAction(room, "Для брокерки нужен активный контракт.");
   const fee = contract.brokerFee || Math.max(2, Math.floor((contract.income || 0) / 6));
-  const assetBonus = ownedAssetCount(player, "broker");
+  const assetBonus = ownedAssetCount(player, "broker") + (ownsSector(player, "service-network") ? 2 : 0);
   const proleumBonus = Number(room.turnState?.brokerBonus || 0);
   player.money += fee + assetBonus + proleumBonus;
   player.influence += 1;
@@ -2241,11 +2577,15 @@ function buyResource(code, amount = 1) {
   normalizeMarket(room);
   const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: ["supplier", "market"] });
   if (gate) return rejectAction(room, gate);
+  const resourceCell = currentCell(room, player);
+  if (resourceCell.resourceCode && resourceCell.resourceCode !== code) {
+    return rejectAction(room, `На клетке "${resourceCell.title}" доступна закупка только ${resourceCell.resourceCode}.`);
+  }
   const limit = resourceBuyLimit(room, player);
   const capacityLeft = warehouseCapacity(player) - warehouseUsed(player);
   amount = Math.max(1, Math.min(amount, limit, capacityLeft, room.market.stock[code] || 0));
   if (!amount) return rejectAction(room, "Нет места на складе или ресурс закончился на рынке.");
-  const supplierDiscount = Math.min(1, ownedAssetCount(player, "supplier"));
+  const supplierDiscount = resourceAssetDiscount(player, code);
   const price = Math.max(1, (room.market.prices[code] || resourceMeta[code]?.basePrice || 0) - supplierDiscount);
   const cost = price * amount;
   if (player.money < cost) {
@@ -2331,7 +2671,7 @@ function closeContract(contractId, routeKey) {
   player.money -= route.cost;
   const risk = resolveRisk(room, player, contract, route);
   const marketDelta = marketIncomeAdjustment(room, contract);
-  const clientBonus = Math.min(2, ownedAssetCount(player, "client"));
+  const clientBonus = Math.min(2, ownedAssetCount(player, "client")) + completedContractSectors(player) * 2;
   const proleumPenalty = Number(room.turnState?.proleumIncomePenalty || 0);
   const finalIncome = Math.max(0, contract.income + marketDelta + clientBonus - proleumPenalty);
   player.money += finalIncome;
@@ -2374,7 +2714,7 @@ function buyCellAsset(cellId) {
   if (!room || !player) return;
   const cell = state.config.boardCells.find((item) => item.id === cellId);
   if (!cell) return;
-  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId, cells: ["asset", "depot", "rail", "road", "client", "supplier", "broker"] });
+  const gate = actionGate(room, player, { requiresRolled: true, cellAction: true, cellId, cells: ["asset", "depot", "rail", "road", "client", "supplier", "market", "broker"] });
   if (gate) return rejectAction(room, gate);
   if (room.assetOwnership[cellId]) return rejectAction(room, `Актив уже принадлежит ${room.assetOwnership[cellId].ownerName}.`);
   if (player.assetPurchasedLap === player.lap) return rejectAction(room, "За один круг можно купить только один новый актив.");
@@ -2383,7 +2723,19 @@ function buyCellAsset(cellId) {
     return rejectAction(room, `Для покупки "${cell.title}" нужно ${cost} млн. Доступно: ${player.money} млн.`);
   } else {
     player.money -= cost;
-    const owned = { id: uid("asset"), cellId, title: cell.title, type: cell.type, cost, ownerId: player.id, ownerName: player.name, effect: assetBenefitText(cell.type) };
+    const owned = {
+      id: uid("asset"),
+      cellId,
+      title: cell.title,
+      type: cell.type,
+      sector: cell.sector,
+      sectorTitle: cell.sectorTitle,
+      resourceCode: cell.resourceCode,
+      cost,
+      ownerId: player.id,
+      ownerName: player.name,
+      effect: sectorMeta[cell.sector]?.bonus || assetBenefitText(cell.type),
+    };
     player.assets.push(owned);
     room.assetOwnership[cellId] = owned;
     player.assetPurchasedLap = player.lap;
