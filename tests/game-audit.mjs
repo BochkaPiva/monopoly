@@ -17,6 +17,14 @@ assert.equal(defaultConfig.boardCells.length, 40, "The board must contain exactl
 assert.ok(defaultConfig.contracts.length >= 60, "The contract deck is unexpectedly small.");
 assert.ok(defaultConfig.events.length >= 30, "The event deck is unexpectedly small.");
 assert.ok(defaultConfig.proleumCards.length >= 25, "The PROLEUM deck is unexpectedly small.");
+assert.equal(defaultConfig.version, "balance-v2", "The active balance model must include the expanded trading cycle.");
+assert.equal(defaultConfig.settings.modes.Briefing.days * defaultConfig.settings.modes.Briefing.roundsPerDay, 10);
+assert.equal(defaultConfig.settings.modes.Standard.days * defaultConfig.settings.modes.Standard.roundsPerDay, 18);
+assert.equal(defaultConfig.settings.modes.Signature.days * defaultConfig.settings.modes.Signature.roundsPerDay, 24);
+assert.equal(defaultConfig.settings.modes.Signature.activeContractLimit, 3, "Signature mode should support a wider contract portfolio.");
+for (const mode of Object.values(defaultConfig.settings.modes)) {
+  assert.equal(mode.businessActions, 2, "Every mode must provide two linked business actions per turn.");
+}
 
 for (const deal of [...defaultConfig.contracts, ...defaultConfig.tenders]) {
   assert.ok(deal.title, `${deal.id}: title is required.`);
@@ -47,6 +55,9 @@ assert.match(appSource, /animatePlayerMove/, "Dice movement must animate through
 assert.match(appSource, /modalState = \{ type: "cell", cellId: cell\.id \}/, "Landing must open the cell action modal.");
 assert.match(appSource, /"logistics-network"/, "The board must preserve the logistics ownership sector.");
 assert.match(appSource, /logisticsMonopoly \? 0/, "Completing logistics must make route cost zero.");
+assert.match(appSource, /function refreshOperationalRound/, "Intermediate rounds must refresh operating capacity without aging contracts.");
+assert.match(appSource, /contract_supply/, "Players must be able to supply resources directly into another player's contract.");
+assert.match(appSource, /requestedResource/, "Players must be able to swap one resource for another.");
 
 console.log(
   JSON.stringify(

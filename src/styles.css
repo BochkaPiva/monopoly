@@ -6303,3 +6303,91 @@ body:has(.gameShell) {
     left: 236px !important;
   }
 }
+
+.actionBudget {
+  display: grid;
+  min-width: 66px;
+  min-height: 36px;
+  place-items: center;
+  padding: 5px 8px;
+  color: #606a62;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(18, 20, 17, 0.09);
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.tradeSheet {
+  width: min(820px, calc(100vw - 32px));
+}
+
+.tradeTypeLabel {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  color: #677168;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tradeSheet select,
+.tradeSheet input {
+  color: #182019;
+  background: rgba(255, 255, 255, 0.68);
+  border-color: rgba(31, 48, 37, 0.14);
+}
+
+.tradeKindPanel {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(31, 48, 37, 0.1);
+  border-radius: 8px;
+}
+
+.tradeKindPanel[hidden] {
+  display: none;
+}
+
+.tradeSheet .tradeForm {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.tradeSheet .tradeForm label {
+  display: grid;
+  gap: 5px;
+  color: #657067;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tradeSheet .tradeForm .wideField {
+  grid-column: span 2;
+}
+
+.tradeOfferList article {
+  color: #263129;
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(31, 48, 37, 0.11);
+}
+
+.tradeListTitle {
+  margin: 18px 0 7px;
+  color: #687269;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .tradeSheet .tradeForm {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .actionBudget {
+    display: none;
+  }
+}

@@ -68,9 +68,9 @@ export const logisticsByPlayers = {
 };
 
 export const defaultConfig = {
-  "version": "balance-v1",
+  "version": "balance-v2",
   "settings": {
-    "version": "balance-v1",
+    "version": "balance-v2",
     "startingMoney": 25,
     "activeContractLimit": 2,
     "warehouseBase": 3,
@@ -94,17 +94,23 @@ export const defaultConfig = {
     "modes": {
       "Briefing": {
         "days": 5,
+        "roundsPerDay": 2,
+        "businessActions": 2,
         "activeContractLimit": 1,
         "advancedHedge": false
       },
       "Standard": {
         "days": 6,
+        "roundsPerDay": 3,
+        "businessActions": 2,
         "activeContractLimit": 2,
         "advancedHedge": true
       },
       "Signature": {
         "days": 8,
-        "activeContractLimit": 2,
+        "roundsPerDay": 3,
+        "businessActions": 2,
+        "activeContractLimit": 3,
         "advancedHedge": true
       }
     }
@@ -118,8 +124,9 @@ export const defaultConfig = {
       "Базовый лимит активных контрактов: 2. В Briefing-режиме - 1 активный контракт."
     ],
     "turn": [
-      "В начале хода уменьшаются сроки активных контрактов, затем игрок бросает 2D6 и выполняет эффект клетки.",
-      "После эффекта клетки доступно одно основное бизнес-действие: контракт, ресурс, поставка, актив, hedge, брокерка или переговоры.",
+      "Игрок бросает 2D6, перемещает фишку и выполняет эффект клетки. Сроки контрактов уменьшаются только при смене торгового дня.",
+      "После эффекта клетки доступны два бизнес-действия: можно связать контракт, ресурс, обеспечение, поставку, hedge или брокерку в одну цепочку.",
+      "Торговый день состоит из 2 раундов в Briefing и 3 раундов в Standard/Signature. Между раундами частично восстанавливаются рынок и логистика.",
       "Дубль не дает дополнительный ход: он усиливает эффект клетки, если это поддержано сценарием."
     ],
     "scoring": [
@@ -129,6 +136,7 @@ export const defaultConfig = {
     ],
     "balance": [
       "Нет dead turn: срочная закупка, брокерка, hedge, переговоры и ПРОЛЕУМ дают аварийные выходы.",
+      "Переговоры включают продажу, обмен ресурсов и субпоставку прямо в контракт другого игрока.",
       "Чужие активы не блокируют базовое действие: владелец получает комиссию, но игрок всегда имеет публичный путь.",
       "Hedge стоит 1 млн, фиксирует цену до 2 единиц одного ресурса и ограничен 2 токенами в руке."
     ]
@@ -221,7 +229,7 @@ export const defaultConfig = {
       "title": "Претензионный блок",
       "type": "claim",
       "sourceType": "Угловая",
-      "description": "Заплатить 2 млн или потерять коммерческое действие; можно продлить контракт за 2 млн.",
+      "description": "Заплатить 2 млн или потерять одно бизнес-действие; можно продлить контракт за 2 млн.",
       "buyable": false
     },
     {

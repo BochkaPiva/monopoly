@@ -31,13 +31,14 @@ RLS включен. Для прототипа открыты политики н
 {
   "id": "room-xxxx",
   "name": "Тестовая партия PROLEUM",
-  "config": { "version": "balance-v1" },
+  "config": { "version": "balance-v2" },
   "mode": "Standard",
   "maxDays": 6,
   "status": "active",
   "revision": 14,
   "updatedAt": "2026-06-22T00:00:00.000Z",
   "day": 1,
+  "roundInDay": 1,
   "currentTurn": 0,
   "turnStartedAt": "2026-06-22T00:00:00.000Z",
   "turnDeadline": "2026-06-22T00:01:00.000Z",
@@ -57,7 +58,7 @@ RLS включен. Для прототипа открыты политики н
   "turnState": {
     "rolled": false,
     "promptDismissed": false,
-    "commercialActionUsed": false,
+    "commercialActionsUsed": 0,
     "cellActionUsed": false,
     "proleumPlayed": false,
     "negotiationUsed": false
@@ -106,7 +107,7 @@ RLS включен. Для прототипа открыты политики н
 }
 ```
 
-`config.version` используется нормализацией клиента. Если сохраненная комната была создана на старом наборе правил, при загрузке она получает актуальный баланс `balance-v1` из `src/game-data.js`: 40 клеток, 78 контрактов, 18 тендеров, 30 карт рынка, 36 событий, 30 карт ПРОЛЕУМ и 14 активов.
+`config.version` используется нормализацией клиента. Если сохраненная комната была создана на старом наборе правил, при загрузке она получает актуальный баланс `balance-v2` из `src/game-data.js`: 40 клеток, 78 контрактов, 18 тендеров, 30 карт рынка, 36 событий, 30 карт ПРОЛЕУМ, несколько раундов в торговом дне и два бизнес-действия за ход.
 
 ## Следующая нормализация
 

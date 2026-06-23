@@ -265,23 +265,42 @@ function expireTurn(room) {
   const player = currentPlayer(room);
   room.lastExpiredDeadline = expiredDeadline;
   room.log.unshift(`${player?.name || "Игрок"}: время хода истекло.`);
+  advanceTurnCycle(room, "Завершен полный круг ходов.");
+  commit();
+  expiringTurn = false;
+}
+
+function advanceTurnCycle(room, reason = "Все игроки сделали ход.") {
   const nextTurn = (room.currentTurn + 1) % room.players.length;
   room.currentTurn = nextTurn;
   room.turnState = normalizeTurnState();
   startTurnClock(room);
-  if (nextTurn === 0) {
+  modalState = null;
+  if (nextTurn !== 0) return;
+
+  if (room.roundInDay >= roundsPerDay(room)) {
     if (room.day >= (room.maxDays || 6)) {
       finishGame(room);
       modalState = { type: "finalResults" };
-    } else {
-      refreshTradingDay(room, "Завершен полный круг ходов.");
-      modalState = null;
+      return;
     }
-  } else {
-    modalState = null;
+    refreshTradingDay(room, reason);
+    return;
   }
-  commit();
-  expiringTurn = false;
+
+  room.roundInDay += 1;
+  refreshOperationalRound(room);
+  room.log.unshift(`Торговый день ${room.day}, раунд ${room.roundInDay}/${roundsPerDay(room)}: мощности и часть рынка восстановлены.`);
+}
+
+function refreshOperationalRound(room) {
+  normalizeMarket(room);
+  const dailyMarket = createMarket(room);
+  Object.keys(resourceMeta).forEach((code) => {
+    const cap = dailyMarket.stock[code] || 0;
+    room.market.stock[code] = Math.min(cap, (room.market.stock[code] || 0) + Math.max(1, Math.ceil(cap / 2)));
+  });
+  room.market.usedLogistics = { rail: 0, depot: 0 };
 }
 
 function loadState() {
@@ -438,9 +457,11 @@ function normalizeState(nextState) {
   nextState.deletedRoomIds ||= [];
   nextState.rooms.forEach((room) => {
     room.day ||= 1;
+    room.roundInDay = Math.max(1, Number(room.roundInDay || 1));
     room.currentTurn ||= 0;
     room.ownerName ||= room.players?.[0]?.name || "";
     room.mode ||= "Standard";
+    room.roundInDay = Math.min(room.roundInDay, Math.max(1, Number(nextState.config?.settings?.modes?.[room.mode]?.roundsPerDay || 3)));
     room.maxDays ||= nextState.config?.settings?.modes?.[room.mode]?.days || 6;
     room.status ||= "active";
     room.revision ||= 0;
@@ -484,10 +505,12 @@ function normalizePlayer(player, index = 0) {
 }
 
 function normalizeTurnState(turnState = {}) {
+  const commercialActionsUsed = Math.max(0, Number(turnState.commercialActionsUsed ?? (turnState.commercialActionUsed ? 1 : 0)));
   return {
     rolled: Boolean(turnState.rolled),
     promptDismissed: Boolean(turnState.promptDismissed),
-    commercialActionUsed: Boolean(turnState.commercialActionUsed),
+    commercialActionsUsed,
+    commercialActionUsed: commercialActionsUsed > 0,
     cellActionUsed: Boolean(turnState.cellActionUsed),
     proleumPlayed: Boolean(turnState.proleumPlayed),
     negotiationUsed: Boolean(turnState.negotiationUsed),
@@ -499,6 +522,26 @@ function normalizeTurnState(turnState = {}) {
     extraRail: Number(turnState.extraRail || 0),
     brokerBonus: Number(turnState.brokerBonus || 0),
   };
+}
+
+function roomModeSettings(room) {
+  return state.config?.settings?.modes?.[room?.mode] || state.config?.settings?.modes?.Standard || {};
+}
+
+function roundsPerDay(room) {
+  return Math.max(1, Number(roomModeSettings(room).roundsPerDay || 3));
+}
+
+function commercialActionLimit(room) {
+  return Math.max(1, Number(roomModeSettings(room).businessActions || 2));
+}
+
+function activeContractLimit(room) {
+  return Math.max(1, Number(roomModeSettings(room).activeContractLimit || state.config?.settings?.activeContractLimit || 2));
+}
+
+function commercialActionsLeft(room) {
+  return Math.max(0, commercialActionLimit(room) - normalizeTurnState(room.turnState).commercialActionsUsed);
 }
 
 function createMarket(room) {
@@ -666,7 +709,9 @@ function actionGate(room, player, options = {}) {
   const turn = normalizeTurnState(room.turnState);
   const cell = currentCell(room, player);
   if (options.requiresRolled && !turn.rolled) return "Сначала бросьте кубики.";
-  if (options.commercial && turn.commercialActionUsed) return "Коммерческое действие в этот ход уже использовано.";
+  if (options.commercial && turn.commercialActionsUsed >= commercialActionLimit(room)) {
+    return `Все бизнес-действия этого хода использованы (${commercialActionLimit(room)}/${commercialActionLimit(room)}).`;
+  }
   if (options.cellAction && turn.cellActionUsed) return "Действие клетки в этот ход уже использовано.";
   if (options.cells?.length && !options.cells.includes(cell?.type)) {
     return `Это действие доступно на клетках: ${options.cells.map(cellTypeLabel).join(", ")}.`;
@@ -677,7 +722,8 @@ function actionGate(room, player, options = {}) {
 
 function markCommercialAction(room) {
   room.turnState = normalizeTurnState(room.turnState);
-  room.turnState.commercialActionUsed = true;
+  room.turnState.commercialActionsUsed = Math.min(commercialActionLimit(room), room.turnState.commercialActionsUsed + 1);
+  room.turnState.commercialActionUsed = room.turnState.commercialActionsUsed > 0;
   room.turnState.promptDismissed = true;
 }
 
@@ -885,9 +931,9 @@ function roomsMarkup() {
         <input id="room-name" value="Тестовая партия PROLEUM" />
         <label class="roomModeLabel">Режим
           <select id="room-mode">
-            <option value="Briefing">Briefing · 5 дней</option>
-            <option value="Standard" selected>Standard · 6 дней</option>
-            <option value="Signature">Signature · 8 дней</option>
+            <option value="Briefing">Briefing · 5 дней × 2 раунда · 10 ходов</option>
+            <option value="Standard" selected>Standard · 6 дней × 3 раунда · 18 ходов</option>
+            <option value="Signature">Signature · 8 дней × 3 раунда · 24 хода</option>
           </select>
         </label>
         <button class="primaryButton" data-action="create-room">Создать</button>
@@ -904,7 +950,7 @@ function roomCardMarkup(room) {
   const canDelete = user.role === "admin" || room.ownerName === user.name;
   return `
     <article class="roomCard ${room.id === activeRoomId ? "active" : ""}">
-      <div><h3>${escapeHtml(room.name)}</h3><span>${room.players.length} игроков · ${escapeHtml(room.mode || "Standard")} · день ${room.day}/${room.maxDays || 6}${room.ownerName ? ` · владелец ${escapeHtml(room.ownerName)}` : ""}</span></div>
+      <div><h3>${escapeHtml(room.name)}</h3><span>${room.players.length} игроков · ${escapeHtml(room.mode || "Standard")} · день ${room.day}/${room.maxDays || 6}, раунд ${room.roundInDay}/${roundsPerDay(room)}${room.ownerName ? ` · владелец ${escapeHtml(room.ownerName)}` : ""}</span></div>
       <div class="miniPlayers">${initials}</div>
       <div class="roomActions">
         <button class="secondaryButton" data-copy="${room.id}">ID</button>
@@ -943,7 +989,15 @@ function turnPhase(room, selected) {
   if (!myTurn) return { id: "WAITING", label: "Ожидание", cta: "Не ваш ход", hint: `Ожидайте, сейчас ходит ${currentPlayer(room)?.name || "другой игрок"}.`, action: null };
   if (!turnState.rolled) return { id: "ROLL", label: "Бросок", cta: "Бросить кубики", hint: "Бросьте 2D6, чтобы перейти на клетку.", action: "roll" };
   if (!turnState.cellActionUsed) return { id: "CELL_ACTION", label: "Клетка", cta: "Открыть действие клетки", hint: `Вы на клетке "${selected?.title || ""}". Откройте действие или переходите к коммерции.`, action: "open-cell", cellId: selected?.id };
-  if (!turnState.commercialActionUsed) return { id: "COMMERCIAL_ACTION", label: "Коммерция", cta: "Выбрать коммерческое действие", hint: "Сделайте одно коммерческое действие: ресурс, контракт, поставка, hedge или брокерка.", action: "commercial" };
+  if (commercialActionsLeft(room) > 0) {
+    return {
+      id: "COMMERCIAL_ACTION",
+      label: "Бизнес",
+      cta: "Выбрать бизнес-действие",
+      hint: `Доступно действий: ${commercialActionsLeft(room)} из ${commercialActionLimit(room)}. Можно взять контракт, закупить ресурс, обеспечить или закрыть поставку.`,
+      action: "commercial",
+    };
+  }
   return { id: "TURN_END_READY", label: "Финал", cta: "Завершить ход", hint: "Основные действия выполнены. Завершите ход.", action: "end-turn" };
 }
 
@@ -954,7 +1008,9 @@ function topBarMarkup(room, selected) {
   const disabled = phase.action ? "" : "disabled";
   const canFinishEarly = canUserAct(room) && turnState.rolled && phase.id !== "TURN_END_READY";
   const incomingTrades = room.tradeOffers.filter((offer) => offer.status === "pending" && offer.buyerName === user.name);
+  const relatedTrades = room.tradeOffers.filter((offer) => offer.status === "pending" && (offer.buyerName === user.name || offer.sellerName === user.name));
   const canNegotiate = canUserAct(room) && turnState.rolled && !turnState.negotiationUsed && room.players.length > 1;
+  const actionBudget = canUserAct(room) && turnState.rolled ? `<span class="actionBudget">Бизнес ${commercialActionsLeft(room)}/${commercialActionLimit(room)}</span>` : "";
   return `<header class="topBar" data-turn="${room.currentTurn}-${room.day}">
     <div class="turnTimer" data-turn-deadline="${escapeHtml(room.turnDeadline || "")}"><i style="width:${Math.max(0, Math.min(100, (turnRemainingMs(room) / TURN_DURATION_MS) * 100))}%"></i><span>${Math.ceil(turnRemainingMs(room) / 1000)}</span></div>
     <div class="topBarMain">
@@ -968,9 +1024,10 @@ function topBarMarkup(room, selected) {
         <div class="dicePair"><span>${diceState?.a || "?"}</span><span>${diceState?.b || "?"}</span></div>
       </div>
       <div class="turnActions">
+        ${actionBudget}
         <button class="primaryButton topCta" data-action="${phase.action || "noop"}" data-cell-id="${phase.cellId || ""}" ${disabled}>${escapeHtml(phase.cta)}</button>
-        ${incomingTrades.length ? `<button class="secondaryButton iconButton tradeAlert" data-action="open-trades">Предложения ${incomingTrades.length}</button>` : ""}
-        ${canNegotiate ? `<button class="secondaryButton iconButton" data-action="open-trade-builder">Сделка</button>` : ""}
+        ${relatedTrades.length ? `<button class="secondaryButton iconButton ${incomingTrades.length ? "tradeAlert" : ""}" data-action="open-trades">Сделки ${relatedTrades.length}</button>` : ""}
+        ${canNegotiate ? `<button class="secondaryButton iconButton" data-action="open-trade-builder">Предложить</button>` : ""}
         ${canFinishEarly ? `<button class="secondaryButton iconButton" data-action="end-turn" title="Завершить ход без обязательного действия">Завершить</button>` : ""}
         <details class="topMenu">
           <summary aria-label="Меню партии">•••</summary>
@@ -1010,7 +1067,7 @@ function boardMarkup(room, openContracts, openTenders, contractReason, tenderRea
         })
         .join("")}
       <div class="boardCenter">
-        <div class="boardLogo">${proleumLogo}<span>торговый день ${room.day}</span></div>
+        <div class="boardLogo">${proleumLogo}<span>день ${room.day} · раунд ${room.roundInDay}/${roundsPerDay(room)}</span></div>
         <div class="centerMarket boardSummary">
           <section class="centerResourceBoard">
             <header><span>Рынок ресурсов</span><strong>Цена / остаток</strong></header>
@@ -1190,7 +1247,7 @@ function miniContractCard(room, player, contract) {
 }
 
 function playerTabletMarkup(room, player, isCurrent) {
-  const activeLimit = state.config?.settings?.activeContractLimit || 2;
+  const activeLimit = activeContractLimit(room);
   const contractSlots = Array.from({ length: activeLimit }, (_, index) => {
     const contract = player.activeContracts[index];
     return contract
@@ -1403,16 +1460,49 @@ function modalMarkup() {
   if (modalState.type === "tradeBuilder" && room && mine) {
     const targets = room.players.filter((player) => player.id !== mine.id);
     const availableResources = Object.entries(mine.warehouse || {}).filter(([, amount]) => amount > 0);
+    const supplyOptions = targets.flatMap((player) =>
+      player.activeContracts.flatMap((contract) =>
+        Object.entries(missingResources(contract))
+          .filter(([, amount]) => amount > 0)
+          .map(([code, amount]) => ({ player, contract, code, amount })),
+      ),
+    );
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet tradeSheet" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
-        <span class="cardType">Переговорная сделка</span>
-        <h2>Предложить ресурс игроку</h2>
-        <p>Одно предложение за ход. Ресурс и деньги передаются только после подтверждения второй стороной.</p>
-        ${availableResources.length ? `<div class="tradeForm">
-          <label>Покупатель<select id="trade-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("")}</select></label>
-          <label>Ресурс<select id="trade-resource">${availableResources.map(([code, amount]) => `<option value="${code}">${code} · доступно ${amount}</option>`).join("")}</select></label>
-          <label>Цена, млн<input id="trade-price" type="number" min="0" max="20" value="4" /></label>
+        <span class="cardType">Переговоры · одно предложение за ход</span>
+        <h2>Сделка между компаниями</h2>
+        <p>Предложение можно принять в любой момент. Оно не расходует бизнес-действие и действует до конца торгового дня.</p>
+        ${availableResources.length ? `<label class="tradeTypeLabel">Тип сделки
+          <select id="trade-type">
+            <option value="sale">Продать ресурс</option>
+            <option value="swap">Обменять ресурсы</option>
+            <option value="contract_supply" ${supplyOptions.length ? "" : "disabled"}>Снабдить чужой контракт</option>
+          </select>
+        </label>
+        <div class="tradeKindPanel" data-trade-kind="sale">
+          <div class="tradeForm">
+            <label>Покупатель<select id="trade-sale-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("")}</select></label>
+            <label>Ваш ресурс<select id="trade-sale-resource">${availableResources.map(([code, amount]) => `<option value="${code}">${code} · доступно ${amount}</option>`).join("")}</select></label>
+            <label>Количество<input id="trade-sale-amount" type="number" min="1" max="3" value="1" /></label>
+            <label>Цена, млн<input id="trade-sale-price" type="number" min="0" max="20" value="4" /></label>
+          </div>
+        </div>
+        <div class="tradeKindPanel" data-trade-kind="swap" hidden>
+          <div class="tradeForm">
+            <label>Партнер<select id="trade-swap-target">${targets.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("")}</select></label>
+            <label>Вы отдаете<select id="trade-swap-give">${availableResources.map(([code, amount]) => `<option value="${code}">${code} · доступно ${amount}</option>`).join("")}</select></label>
+            <label>Количество<input id="trade-swap-give-amount" type="number" min="1" max="3" value="1" /></label>
+            <label>Получаете<select id="trade-swap-receive">${Object.keys(resourceMeta).map((code) => `<option value="${code}">${code}</option>`).join("")}</select></label>
+            <label>Количество<input id="trade-swap-receive-amount" type="number" min="1" max="3" value="1" /></label>
+          </div>
+        </div>
+        <div class="tradeKindPanel" data-trade-kind="contract_supply" hidden>
+          ${supplyOptions.length ? `<div class="tradeForm">
+            <label class="wideField">Контракт<select id="trade-supply-contract">${supplyOptions.map(({ player, contract, code, amount }) => `<option value="${player.id}::${contract.instanceId}::${code}">${escapeHtml(player.name)} · ${escapeHtml(contract.title)} · нужно ${code} x${amount}</option>`).join("")}</select></label>
+            <label>Количество<input id="trade-supply-amount" type="number" min="1" max="3" value="1" /></label>
+            <label>Цена, млн<input id="trade-supply-price" type="number" min="0" max="20" value="4" /></label>
+          </div><div class="hintBox">Ресурс попадет прямо в контракт, минуя склад покупателя. Поставщик получает +1 влияние.</div>` : `<div class="hintBox">У других игроков пока нет контрактов с дефицитом ресурсов.</div>`}
         </div>
         <div class="modalActions"><button class="primaryButton" data-action="create-trade">Отправить предложение</button></div>` : `<div class="hintBox">На складе нет ресурсов для продажи.</div>`}
       </section>
@@ -1420,16 +1510,24 @@ function modalMarkup() {
   }
   if (modalState.type === "tradeInbox" && room) {
     const offers = room.tradeOffers.filter((offer) => offer.status === "pending" && offer.buyerName === user.name);
+    const outgoing = room.tradeOffers.filter((offer) => offer.status === "pending" && offer.sellerName === user.name);
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet tradeSheet" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
         <span class="cardType">Входящие предложения</span>
         <h2>Сделки игроков</h2>
+        <h3 class="tradeListTitle">Вам предлагают</h3>
         <div class="tradeOfferList">${offers.map((offer) => `<article>
-          <div><span>${escapeHtml(offer.sellerName)} предлагает</span><strong>${offer.resource} x${offer.amount}</strong></div>
-          <b>${offer.price} млн</b>
+          <div><span>${escapeHtml(offer.sellerName)} предлагает</span><strong>${escapeHtml(tradeOfferSummary(offer))}</strong></div>
+          <b>${offer.type === "swap" ? "обмен" : `${offer.price} млн`}</b>
           <div class="miniActions"><button class="primaryButton" data-accept-trade="${offer.id}">Принять</button><button class="secondaryButton" data-decline-trade="${offer.id}">Отклонить</button></div>
-        </article>`).join("") || `<div class="hintBox">Новых предложений нет.</div>`}</div>
+        </article>`).join("") || `<div class="hintBox">Новых входящих предложений нет.</div>`}</div>
+        <h3 class="tradeListTitle">Ваши предложения</h3>
+        <div class="tradeOfferList">${outgoing.map((offer) => `<article>
+          <div><span>Ожидает ответа: ${escapeHtml(offer.buyerName)}</span><strong>${escapeHtml(tradeOfferSummary(offer))}</strong></div>
+          <b>${offer.type === "swap" ? "обмен" : `${offer.price} млн`}</b>
+          <div class="miniActions"><button class="secondaryButton" data-cancel-trade="${offer.id}">Отозвать</button></div>
+        </article>`).join("") || `<div class="hintBox">Активных исходящих предложений нет.</div>`}</div>
       </section>
     </div>`;
   }
@@ -1448,7 +1546,7 @@ function modalMarkup() {
           <span>Следующий этап <strong>выбор маршрута</strong></span>
           <span>Доход после поставки <strong>${contract.income} млн</strong></span>
         </div>
-        <div class="hintBox">Обеспечение заняло коммерческое действие. На следующем ходу откройте контракт в планшете и нажмите «Выбрать маршрут».</div>
+        <div class="hintBox">${commercialActionsLeft(room) > 0 ? "У вас осталось еще одно бизнес-действие: контракт можно закрыть маршрутом уже в этом ходу." : "Бизнес-действия закончились. В следующем ходу откройте контракт и выберите маршрут."}</div>
         <div class="modalActions"><button class="primaryButton" data-action="close-modal">Понятно</button></div>
       </section>
     </div>`;
@@ -1490,20 +1588,26 @@ function modalMarkup() {
     </div>`;
   }
   if (modalState.type === "commercial" && mine) {
+    const actionsLeft = commercialActionsLeft(room);
     return `<div class="modalBackdrop" data-action="close-modal">
       <section class="modalSheet cardSheet" data-modal-body>
         <button class="modalClose" data-action="close-modal">×</button>
-        <span class="cardType">COMMERCIAL_ACTION</span>
-        <h2>Выберите коммерческое действие</h2>
-        <p>За ход доступно одно коммерческое действие. Недоступные варианты показывают причину блокировки.</p>
+        <span class="cardType">Бизнес-действия · осталось ${actionsLeft}/${commercialActionLimit(room)}</span>
+        <h2>Выберите следующее действие</h2>
+        <p>За ход доступны два бизнес-действия. Их можно связать в цепочку: взять контракт и обеспечить его, купить ресурс и подготовить поставку.</p>
         <div class="decisionGrid">
+          ${mine.activeContracts.map((contract) => `<button class="routeOption commercialOption activeDealOption" data-open-card="activeContract:${contract.instanceId}">
+            <strong>${contractReady(contract) ? "Закрыть поставку" : "Обеспечить контракт"}</strong>
+            <span>${escapeHtml(contract.title)}</span>
+            <small>${contractReady(contract) ? "Ресурс собран · выбрать маршрут" : Object.entries(missingResources(contract)).filter(([, amount]) => amount > 0).map(([code, amount]) => `${code} x${amount}`).join(" · ")}</small>
+          </button>`).join("")}
           ${commercialActionOption(room, mine, { label: "Закупить ресурс", cells: ["supplier", "market"], details: "REG / PRM / DTL в пределах остатка рынка", action: "resources" })}
           ${commercialActionOption(room, mine, { label: "Взять контракт", cells: ["contract", "client"], details: "Открытая сделка попадет в свободный слот", action: "contracts" })}
           ${commercialActionOption(room, mine, { label: "Заявиться на тендер", cells: ["tender"], details: "Тендер занимает слот активной сделки", action: "tender" })}
           ${commercialActionOption(room, mine, { label: "Hedge MOEX", cells: ["hedge"], details: "Фиксация цены ресурса до 2 жетонов", action: "hedge" })}
           ${commercialActionOption(room, mine, { label: "Брокерка", cells: ["broker"], details: "Передать активный контракт в брокерский контур", action: "broker" })}
         </div>
-        <button class="secondaryButton skipAction" data-action="skip-commercial">Пропустить коммерческое действие</button>
+        <button class="secondaryButton skipAction" data-action="skip-commercial">Перейти к завершению хода</button>
       </section>
     </div>`;
   }
@@ -1601,7 +1705,7 @@ function modalMarkup() {
         <button class="modalClose" data-action="close-modal">×</button>
         <span class="kicker">Маршрут поставки</span>
         <h2>${escapeHtml(contract.title)}</h2>
-        <p>Выберите логистику. Закрытие поставки занимает коммерческое действие, списывает мощность дня и запускает проверку риска.</p>
+        <p>Выберите логистику. Закрытие поставки занимает одно бизнес-действие, списывает мощность раунда и запускает проверку риска.</p>
         <div class="routeGrid">
           ${routes
             .map((route) => `<button class="routeOption" data-close-contract="${contract.instanceId}" data-route="${route.key}" ${route.available ? "" : "disabled"}>
@@ -1750,10 +1854,10 @@ function cellActionMarkup(cell, myTurn) {
       <p>Выберите один вариант. Претензионный блок обязателен: завершить ход до решения нельзя.</p>
       <div class="claimChoices">
         <button class="primaryButton" data-claim-choice="pay" ${canPay ? "" : "disabled"}>
-          <strong>Заплатить 2 млн</strong><span>Сохранить коммерческое действие</span>
+          <strong>Заплатить 2 млн</strong><span>Сохранить оба бизнес-действия</span>
         </button>
         <button class="secondaryButton" data-claim-choice="lose-commercial" ${gate ? "disabled" : ""}>
-          <strong>Принять претензию</strong><span>Потерять коммерческое действие этого хода</span>
+          <strong>Принять претензию</strong><span>Потерять одно бизнес-действие этого хода</span>
         </button>
         ${contracts.length
           ? contracts.map((contract) => `<button class="secondaryButton" data-claim-choice="extend" data-contract-id="${contract.instanceId}" ${!gate && player.money >= 2 ? "" : "disabled"}>
@@ -1895,8 +1999,10 @@ function bindCommon() {
     render();
   });
   document.querySelector("[data-action='create-trade']")?.addEventListener("click", createTradeOffer);
+  document.querySelector("#trade-type")?.addEventListener("change", updateTradeBuilderPanels);
   document.querySelectorAll("[data-accept-trade]").forEach((button) => button.addEventListener("click", () => resolveTradeOffer(button.dataset.acceptTrade, true)));
   document.querySelectorAll("[data-decline-trade]").forEach((button) => button.addEventListener("click", () => resolveTradeOffer(button.dataset.declineTrade, false)));
+  document.querySelectorAll("[data-cancel-trade]").forEach((button) => button.addEventListener("click", () => cancelTradeOffer(button.dataset.cancelTrade)));
   document.querySelector("[data-action='skip-cell']")?.addEventListener("click", skipCellAction);
   document.querySelector("[data-action='skip-commercial']")?.addEventListener("click", skipCommercialAction);
   document.querySelector("[data-action='toggle-tablet']")?.addEventListener("click", () => {
@@ -2006,6 +2112,19 @@ function bindCommon() {
   bindEditor();
 }
 
+function updateTradeBuilderPanels() {
+  const kind = document.querySelector("#trade-type")?.value || "sale";
+  document.querySelectorAll("[data-trade-kind]").forEach((panel) => {
+    panel.hidden = panel.dataset.tradeKind !== kind;
+  });
+}
+
+function tradeOfferSummary(offer) {
+  if (offer.type === "swap") return `${offer.resource} x${offer.amount} на ${offer.requestedResource} x${offer.requestedAmount}`;
+  if (offer.type === "contract_supply") return `${offer.resource} x${offer.amount} в контракт «${offer.contractTitle}»`;
+  return `${offer.resource} x${offer.amount}`;
+}
+
 function createRoom(name, mode = "Standard") {
   const modeSettings = state.config?.settings?.modes?.[mode] || state.config?.settings?.modes?.Standard || { days: 6 };
   const room = {
@@ -2018,6 +2137,7 @@ function createRoom(name, mode = "Standard") {
     revision: 0,
     updatedAt: new Date().toISOString(),
     day: 1,
+    roundInDay: 1,
     currentTurn: 0,
     marketCardIndex: 0,
     turnState: normalizeTurnState(),
@@ -2060,10 +2180,9 @@ function commercialActionOption(room, player, option) {
   const reason = gate || (!onRightCell ? `Нужно стоять на клетке: ${option.cells.join(", ")}.` : "");
   const enabled = !reason;
   if (option.action === "resources" && enabled) {
+    const resourceCodes = currentCell.resourceCode ? [currentCell.resourceCode] : Object.keys(resourceMeta);
     return `<div class="routeOption commercialOption"><strong>${escapeHtml(option.label)}</strong><span>${escapeHtml(option.details)}</span><div class="miniActions">
-      <button class="secondaryButton" data-buy-resource="REG">REG</button>
-      <button class="secondaryButton" data-buy-resource="PRM">PRM</button>
-      <button class="secondaryButton" data-buy-resource="DTL">DTL</button>
+      ${resourceCodes.map((code) => `<button class="secondaryButton" data-buy-resource="${code}">${code}</button>`).join("")}
     </div></div>`;
   }
   if (option.action === "hedge" && enabled) {
@@ -2217,9 +2336,10 @@ function skipCommercialAction() {
   if (!room || !canUserAct(room) || !room.turnState?.rolled) return;
   const player = currentPlayer(room);
   room.turnState = normalizeTurnState(room.turnState);
+  room.turnState.commercialActionsUsed = commercialActionLimit(room);
   room.turnState.commercialActionUsed = true;
   room.turnState.promptDismissed = true;
-  room.log.unshift(`${player.name}: пропустил коммерческое действие.`);
+  room.log.unshift(`${player.name}: завершил бизнес-фазу досрочно.`);
   modalState = null;
   commit();
 }
@@ -2231,26 +2351,69 @@ function createTradeOffer() {
   room.turnState = normalizeTurnState(room.turnState);
   if (!room.turnState.rolled) return rejectAction(room, "Сначала бросьте кубики.");
   if (room.turnState.negotiationUsed) return rejectAction(room, "Переговорная сделка в этот ход уже использована.");
-  const buyerId = document.querySelector("#trade-target")?.value;
-  const resource = document.querySelector("#trade-resource")?.value;
-  const price = Math.max(0, Math.min(20, Number(document.querySelector("#trade-price")?.value || 0)));
+  const type = document.querySelector("#trade-type")?.value || "sale";
+  let buyerId = "";
+  let resource = "";
+  let amount = 1;
+  let price = 0;
+  let requestedResource = "";
+  let requestedAmount = 0;
+  let contractId = "";
+  let contractTitle = "";
+
+  if (type === "sale") {
+    buyerId = document.querySelector("#trade-sale-target")?.value;
+    resource = document.querySelector("#trade-sale-resource")?.value;
+    amount = Math.max(1, Math.min(3, Number(document.querySelector("#trade-sale-amount")?.value || 1)));
+    price = Math.max(0, Math.min(20, Number(document.querySelector("#trade-sale-price")?.value || 0)));
+  } else if (type === "swap") {
+    buyerId = document.querySelector("#trade-swap-target")?.value;
+    resource = document.querySelector("#trade-swap-give")?.value;
+    amount = Math.max(1, Math.min(3, Number(document.querySelector("#trade-swap-give-amount")?.value || 1)));
+    requestedResource = document.querySelector("#trade-swap-receive")?.value;
+    requestedAmount = Math.max(1, Math.min(3, Number(document.querySelector("#trade-swap-receive-amount")?.value || 1)));
+    if (resource === requestedResource) return rejectAction(room, "Для обмена выберите разные ресурсы.");
+  } else if (type === "contract_supply") {
+    const [targetId, targetContractId, targetResource] = String(document.querySelector("#trade-supply-contract")?.value || "").split("::");
+    buyerId = targetId;
+    contractId = targetContractId;
+    resource = targetResource;
+    amount = Math.max(1, Math.min(3, Number(document.querySelector("#trade-supply-amount")?.value || 1)));
+    price = Math.max(0, Math.min(20, Number(document.querySelector("#trade-supply-price")?.value || 0)));
+  }
+
   const buyer = room.players.find((player) => player.id === buyerId);
   if (!buyer || buyer.id === seller.id) return rejectAction(room, "Выберите другого игрока.");
-  if (!resource || (seller.warehouse?.[resource] || 0) < 1) return rejectAction(room, "Выбранного ресурса больше нет на складе.");
+  if (!resource || (seller.warehouse?.[resource] || 0) < amount) return rejectAction(room, `На складе нет ${resource || "ресурса"} x${amount}.`);
+  if (type === "swap" && (buyer.warehouse?.[requestedResource] || 0) < requestedAmount) {
+    return rejectAction(room, `У ${buyer.name} нет ${requestedResource} x${requestedAmount} для обмена.`);
+  }
+  if (type === "contract_supply") {
+    const contract = buyer.activeContracts.find((item) => item.instanceId === contractId);
+    const missing = contract ? missingResources(contract)[resource] || 0 : 0;
+    if (!contract || missing < amount) return rejectAction(room, "Контракт изменился или больше не нуждается в таком количестве ресурса.");
+    contractTitle = contract.title;
+  }
   room.tradeOffers.push({
     id: uid("trade"),
+    type,
     status: "pending",
     sellerId: seller.id,
     sellerName: seller.name,
     buyerId: buyer.id,
     buyerName: buyer.name,
     resource,
-    amount: 1,
+    amount,
     price,
+    requestedResource,
+    requestedAmount,
+    contractId,
+    contractTitle,
     createdDay: room.day,
+    createdRound: room.roundInDay,
   });
   room.turnState.negotiationUsed = true;
-  room.log.unshift(`${seller.name}: предложил ${buyer.name} купить ${resource} x1 за ${price} млн.`);
+  room.log.unshift(`${seller.name}: предложил ${buyer.name} сделку — ${tradeOfferSummary(room.tradeOffers.at(-1))}.`);
   modalState = { type: "notice", title: "Предложение отправлено", message: `${buyer.name} увидит его в панели хода.` };
   commit();
 }
@@ -2272,16 +2435,54 @@ function resolveTradeOffer(offerId, accepted) {
   }
   if (!seller || !buyer) return rejectAction(room, "Один из участников сделки покинул комнату.");
   if ((seller.warehouse?.[offer.resource] || 0) < offer.amount) return rejectAction(room, "У продавца уже нет предложенного ресурса.");
-  if (buyer.money < offer.price) return rejectAction(room, `Для сделки нужно ${offer.price} млн. Доступно: ${buyer.money} млн.`);
-  if (warehouseUsed(buyer) + offer.amount > warehouseCapacity(buyer)) return rejectAction(room, "На складе покупателя нет свободного места.");
-  seller.warehouse[offer.resource] -= offer.amount;
-  buyer.warehouse[offer.resource] = (buyer.warehouse[offer.resource] || 0) + offer.amount;
-  buyer.money -= offer.price;
-  seller.money += offer.price;
+  if (offer.type === "swap") {
+    if ((buyer.warehouse?.[offer.requestedResource] || 0) < offer.requestedAmount) return rejectAction(room, "У партнера больше нет запрошенного ресурса.");
+    if (warehouseUsed(seller) - offer.amount + offer.requestedAmount > warehouseCapacity(seller)) return rejectAction(room, "На складе продавца не хватает места для встречного ресурса.");
+    if (warehouseUsed(buyer) - offer.requestedAmount + offer.amount > warehouseCapacity(buyer)) return rejectAction(room, "На складе покупателя не хватает места после обмена.");
+    seller.warehouse[offer.resource] -= offer.amount;
+    buyer.warehouse[offer.resource] = (buyer.warehouse[offer.resource] || 0) + offer.amount;
+    buyer.warehouse[offer.requestedResource] -= offer.requestedAmount;
+    seller.warehouse[offer.requestedResource] = (seller.warehouse[offer.requestedResource] || 0) + offer.requestedAmount;
+  } else if (offer.type === "contract_supply") {
+    const contract = buyer.activeContracts.find((item) => item.instanceId === offer.contractId);
+    const missing = contract ? missingResources(contract)[offer.resource] || 0 : 0;
+    if (!contract || missing < offer.amount) return rejectAction(room, "Контракт уже закрыт или его потребность изменилась.");
+    if (buyer.money < offer.price) return rejectAction(room, `Для субпоставки нужно ${offer.price} млн. Доступно: ${buyer.money} млн.`);
+    seller.warehouse[offer.resource] -= offer.amount;
+    contract.filled[offer.resource] = (contract.filled[offer.resource] || 0) + offer.amount;
+    buyer.money -= offer.price;
+    seller.money += offer.price;
+    seller.influence += 1;
+  } else {
+    if (buyer.money < offer.price) return rejectAction(room, `Для сделки нужно ${offer.price} млн. Доступно: ${buyer.money} млн.`);
+    if (warehouseUsed(buyer) + offer.amount > warehouseCapacity(buyer)) return rejectAction(room, "На складе покупателя нет свободного места.");
+    seller.warehouse[offer.resource] -= offer.amount;
+    buyer.warehouse[offer.resource] = (buyer.warehouse[offer.resource] || 0) + offer.amount;
+    buyer.money -= offer.price;
+    seller.money += offer.price;
+  }
   offer.status = "accepted";
   offer.resolvedAt = new Date().toISOString();
-  room.log.unshift(`${buyer.name}: принял сделку ${offer.sellerName}, ${offer.resource} x${offer.amount} за ${offer.price} млн.`);
-  modalState = { type: "notice", title: "Сделка завершена", message: `${offer.resource} добавлен на склад, ${offer.price} млн перечислены продавцу.` };
+  room.log.unshift(`${buyer.name}: принял предложение ${offer.sellerName} — ${tradeOfferSummary(offer)}.`);
+  const resultMessage =
+    offer.type === "swap"
+      ? `${offer.resource} x${offer.amount} обменяны на ${offer.requestedResource} x${offer.requestedAmount}.`
+      : offer.type === "contract_supply"
+        ? `${offer.resource} x${offer.amount} добавлены прямо в контракт «${offer.contractTitle}». ${offer.price} млн перечислены поставщику, его влияние +1.`
+        : `${offer.resource} x${offer.amount} добавлены на склад, ${offer.price} млн перечислены продавцу.`;
+  modalState = { type: "notice", title: "Сделка завершена", message: resultMessage };
+  commit();
+}
+
+function cancelTradeOffer(offerId) {
+  const room = activeRoom();
+  if (!room) return;
+  const offer = room.tradeOffers.find((item) => item.id === offerId && item.status === "pending");
+  if (!offer || offer.sellerName !== user.name) return;
+  offer.status = "cancelled";
+  offer.resolvedAt = new Date().toISOString();
+  room.log.unshift(`${offer.sellerName}: отозвал предложение для ${offer.buyerName}.`);
+  modalState = null;
   commit();
 }
 
@@ -2345,21 +2546,7 @@ function endTurn() {
     return rejectAction(room, "Сначала урегулируйте претензионный блок.");
   }
   room.log.unshift(`${player.name}: завершил ход.`);
-  const nextTurn = (room.currentTurn + 1) % room.players.length;
-  room.currentTurn = nextTurn;
-  room.turnState = normalizeTurnState();
-  startTurnClock(room);
-  if (nextTurn === 0) {
-    if (room.day >= (room.maxDays || 6)) {
-      finishGame(room);
-      modalState = { type: "finalResults" };
-    } else {
-      refreshTradingDay(room, "Все игроки сделали ход.");
-      modalState = null;
-    }
-  } else {
-    modalState = null;
-  }
+  advanceTurnCycle(room);
   commit();
 }
 
@@ -2374,10 +2561,12 @@ function resolveClaimChoice(choice, contractId = "") {
   if (choice === "pay") {
     if (player.money < 2) return rejectAction(room, "Для урегулирования нужно 2 млн.");
     player.money -= 2;
-    room.log.unshift(`${player.name}: урегулировал претензию за 2 млн и сохранил коммерческое действие.`);
+    room.log.unshift(`${player.name}: урегулировал претензию за 2 млн и сохранил бизнес-действия.`);
   } else if (choice === "lose-commercial") {
+    room.turnState = normalizeTurnState(room.turnState);
+    room.turnState.commercialActionsUsed = Math.min(commercialActionLimit(room), room.turnState.commercialActionsUsed + 1);
     room.turnState.commercialActionUsed = true;
-    room.log.unshift(`${player.name}: принял претензию и потерял коммерческое действие этого хода.`);
+    room.log.unshift(`${player.name}: принял претензию и потерял одно бизнес-действие этого хода.`);
   } else if (choice === "extend") {
     const contract = player.activeContracts.find((item) => item.instanceId === contractId);
     if (!contract) return rejectAction(room, "Выбранный контракт больше не активен.");
@@ -2414,8 +2603,12 @@ function nextDay() {
 function refreshTradingDay(room, reason) {
   room.players.forEach((player) => ageContracts(room, player));
   room.day += 1;
+  room.roundInDay = 1;
   room.marketCardIndex = (room.marketCardIndex + 1) % state.config.marketCards.length;
   room.market = createMarket(room);
+  room.tradeOffers = (room.tradeOffers || []).map((offer) =>
+    offer.status === "pending" ? { ...offer, status: "expired", resolvedAt: new Date().toISOString() } : offer,
+  );
   room.players.forEach((player) => normalizePlayer(player));
   room.log.unshift(`Торговый день ${room.day}: рынок обновлен. ${reason}`);
 }
@@ -2447,7 +2640,7 @@ function takeDeal(kind, id) {
   normalizePlayer(player);
   const gate = actionGate(room, player, { requiresRolled: true, commercial: true, cells: kind === "tenders" ? ["tender"] : ["contract", "client"] });
   if (gate) return rejectAction(room, gate);
-  const activeLimit = state.config?.settings?.activeContractLimit || 2;
+  const activeLimit = activeContractLimit(room);
   if (player.activeContracts.length >= activeLimit) {
     room.log.unshift(`${player.name}: нет свободного слота под контракт.`);
     modalState = null;
@@ -2664,7 +2857,7 @@ function closeContract(contractId, routeKey) {
   if (!contract || !contractReady(contract)) return;
   const route = routeOptions(room, contract).find((item) => item.key === routeKey);
   if (!route) return rejectAction(room, "Выберите доступный маршрут.");
-  if (!route.available) return rejectAction(room, "На выбранный маршрут не хватает мощности дня.");
+  if (!route.available) return rejectAction(room, "На выбранный маршрут не хватает мощности текущего раунда.");
   if (player.money < route.cost) return rejectAction(room, `Не хватает капитала на логистику: нужно ${route.cost} млн.`);
   room.market.usedLogistics.rail += route.rail;
   room.market.usedLogistics.depot += route.depot;
